@@ -9,7 +9,7 @@ import importlib, subprocess, sys as _sys
 def _ensure(pkg):
     try: importlib.import_module(pkg)
     except ImportError:
-        print(f"  📦 Instalando {pkg}...")
+        print(f"   Instalando {pkg}...")
         subprocess.check_call([_sys.executable, "-m", "pip", "install", pkg, "-q"])
 _ensure("openpyxl"); _ensure("pandas")
 
@@ -146,7 +146,7 @@ def _prep(df):
     return df
 
 def leer_cp2025(path):
-    print("  📊 Leyendo Cuenta Pública 2025...")
+    print("   Leyendo Cuenta Pública 2025...")
     df = _prep(_leer_csv(path))
     sc = df[df['SC']]
     base = dict(sc.groupby('P5')['EJERCIDO'].sum() / 1_000_000)
@@ -159,11 +159,11 @@ def leer_cp2025(path):
     p33602 = sc[sc['P5'] == 33602]
     base[('33602','foto')]   = p33602[p33602['ID_UNIDAD'] == '512']['EJERCIDO'].sum() / 1_000_000
 
-    print(f"  ✅ CP 2025: {len(sc['P5'].unique())} partidas")
+    print(f"   CP 2025: {len(sc['P5'].unique())} partidas")
     return base
 
 def leer_sicop2026(path):
-    print("  📊 Leyendo SICOP 2026...")
+    print("   Leyendo SICOP 2026...")
     df = _prep(_leer_csv(path))
     sc = df[df['SC']].copy()
     sc['EJ'] = sc['EJERCIDO'] + sc['EJERCIDO_TRAMITE']
@@ -175,7 +175,7 @@ def leer_sicop2026(path):
     p33602 = sc[sc['P5'] == 33602]
     base[('33602','foto')]   = p33602[p33602['ID_UNIDAD'] == '512']['EJ'].sum() / 1_000_000
 
-    print(f"  ✅ SICOP 2026: {len(sc['P5'].unique())} partidas")
+    print(f"   SICOP 2026: {len(sc['P5'].unique())} partidas")
     return base
 
 def detectar_corte(path):
@@ -249,7 +249,7 @@ def generar_austeridad(ruta_cp, ruta_sicop, ruta_salida=None):
     ej26 = leer_sicop2026(ruta_sicop)
     c = detectar_corte(ruta_sicop)
     d, m_es, abr3, anio = c['dia'], c['mes_es'], c['abr3'], c['anio']
-    print(f"  📅 Corte: {d} de {m_es} de {anio}")
+    print(f"   Corte: {d} de {m_es} de {anio}")
 
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -485,24 +485,24 @@ def _colab_main():
     print('═'*55)
     print('  FORMATO AUSTERIDAD — SADER')
     print('═'*55)
-    print('\n📂 1/2 — Sube el CSV de CUENTA PÚBLICA cierre 2025:')
+    print('\n 1/2 — Sube el CSV de CUENTA PÚBLICA cierre 2025:')
     sub1 = _f_.upload()
     if not sub1: return
     n1, c1 = next(iter(sub1.items()))
     r1 = f'/content/{n1}'
     with open(r1,'wb') as f: f.write(c1)
-    print(f'   ✅ {n1}')
-    print('\n📂 2/2 — Sube el CSV del SICOP corte actual 2026:')
+    print(f'    {n1}')
+    print('\n 2/2 — Sube el CSV del SICOP corte actual 2026:')
     sub2 = _f_.upload()
     if not sub2: return
     n2, c2 = next(iter(sub2.items()))
     r2 = f'/content/{n2}'
     with open(r2,'wb') as f: f.write(c2)
-    print(f'   ✅ {n2}')
+    print(f'    {n2}')
     rout = generar_austeridad(r1, r2)
-    print('\n⬇️  Descargando...')
+    print('\n  Descargando...')
     _f_.download(rout)
-    print('✅ ¡Listo!')
+    print(' ¡Listo!')
 
 if __name__ == '__main__':
     _colab_main()
