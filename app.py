@@ -79,7 +79,7 @@ st.markdown("""
 # ════════════════════════════════════════════════════════════════════
 st.title("Reportes COCODI — SADER")
 
-st.markdown("## 📊 Generador de Cuadros COCODI")
+st.markdown("##  Generador de Cuadros COCODI")
 st.markdown(
     "<div class='info-box'>"
     "Sube el archivo MAP del día (<b>.csv</b> o <b>.xlsx</b> con hojas TD) "
@@ -136,7 +136,7 @@ if archivo_map is not None:
 
                 os.unlink(ruta_tmp)
 
-                st.success(f"✅ Cuadros generados — corte al {tf['dia_mes_anio']}")
+                st.success(f" Cuadros generados — corte al {tf['dia_mes_anio']}")
                 st.download_button(
                     label=f"⬇️  Descargar {nombre_out}",
                     data=buf,
@@ -154,7 +154,7 @@ if archivo_map is not None:
 # ════════════════════════════════════════════════════════════════════
 st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
 
-st.markdown("## 📋 Formato de Austeridad")
+st.markdown("##  Formato de Austeridad")
 st.markdown(
     "<div class='info-box'>"
     "Sube la <b>Cuenta Pública cierre 2025</b> (CSV) y el <b>SICOP del corte actual 2026</b> (CSV) "
@@ -225,7 +225,7 @@ if st.button(
             os.rmdir(ruta_sicop_dir)
 
             st.success(
-                f"✅ Formato generado — corte al "
+                f" Formato generado — corte al "
                 f"{corte['dia']} de {corte['mes_es']} de {corte['anio']}"
             )
             st.download_button(
