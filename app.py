@@ -82,7 +82,7 @@ st.title("Reportes COCODI — SADER")
 st.markdown("##  Generador de Cuadros COCODI")
 st.markdown(
     "<div class='info-box'>"
-    "Sube el archivo MAP del día (<b>.csv</b> o <b>.xlsx</b> con hojas TD) "
+    "Sube el archivo MAP del día (<b>.csv</b> o <b>.xlsx</b>) "
     "y descarga el Excel con las 4 hojas: "
     "<b>Pp</b>, <b>Pp y CAP</b>, <b>AGRICULTURA</b> y <b>Presupuesto Comisario</b>."
     "</div>",
