@@ -126,7 +126,7 @@ if archivo is not None:
 
                 os.unlink(ruta_tmp)
 
-                st.success(f"✅ Cuadros generados — corte al {tf['dia_mes_anio']}")
+                st.success(f" Cuadros generados — corte al {tf['dia_mes_anio']}")
 
                 st.download_button(
                     label=f"⬇️  Descargar {nombre_out}",
