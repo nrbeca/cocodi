@@ -146,36 +146,52 @@ def _prep(df):
     return df
 
 def leer_cp2025(path):
+    """
+    CP 2025 — Sector Central = URs numéricas 3 dígitos + UR G00
+    Columna: solo EJERCIDO (cierre definitivo)
+    Split 32301: UR 513 = Arrendamientos | resto = Fotocopiado
+    33602 Fotocopiado: se captura manualmente (dato de DGRMIS), no se puede
+    derivar del CSV — el script deja 0 y el usuario lo ajusta.
+    """
     print("   Leyendo Cuenta Pública 2025...")
     df = _prep(_leer_csv(path))
-    sc = df[df['SC']]
+    # Sector Central = numéricas 3 dígitos + G00
+    mask = df['SC'] | (df['ID_UNIDAD'] == 'G00')
+    sc   = df[mask]
     base = dict(sc.groupby('P5')['EJERCIDO'].sum() / 1_000_000)
 
     # Split 32301: UR 513 = Arrendamientos, resto = Fotocopiado
     p32301 = sc[sc['P5'] == 32301]
     base[('32301','arrend')] = p32301[p32301['ID_UNIDAD'] == '513']['EJERCIDO'].sum() / 1_000_000
     base[('32301','foto')]   = p32301[p32301['ID_UNIDAD'] != '513']['EJERCIDO'].sum() / 1_000_000
-    # 33602 Fotocopiado = solo UR 512 (DGRMIS)
-    p33602 = sc[sc['P5'] == 33602]
-    base[('33602','foto')]   = p33602[p33602['ID_UNIDAD'] == '512']['EJERCIDO'].sum() / 1_000_000
 
-    print(f"   CP 2025: {len(sc['P5'].unique())} partidas")
+    # 33602 Fotocopiado: no se puede derivar automáticamente del CSV
+    # (el total SC incluye muchas URs que no son fotocopiado)
+    # Se deja en 0 — el usuario ajusta si conoce el dato
+    base[('33602','foto')] = 0.0
+
+    print(f"   CP 2025: {len(sc['P5'].unique())} partidas (SC + G00)")
     return base
 
 def leer_sicop2026(path):
+    """
+    SICOP 2026 — Sector Central = URs numéricas 3 dígitos + UR G00
+    Columna: solo EJERCIDO (EJ_TRAMITE introduce registros aún no confirmados)
+    Split 32301: UR 513 = Arrendamientos | resto = Fotocopiado
+    33602 Fotocopiado: igual que CP2025, se deja en 0.
+    """
     print("   Leyendo SICOP 2026...")
     df = _prep(_leer_csv(path))
-    sc = df[df['SC']].copy()
-    sc['EJ'] = sc['EJERCIDO'] + sc['EJERCIDO_TRAMITE']
-    base = dict(sc.groupby('P5')['EJ'].sum() / 1_000_000)
+    mask = df['SC'] | (df['ID_UNIDAD'] == 'G00')
+    sc   = df[mask]
+    base = dict(sc.groupby('P5')['EJERCIDO'].sum() / 1_000_000)
 
     p32301 = sc[sc['P5'] == 32301]
-    base[('32301','arrend')] = p32301[p32301['ID_UNIDAD'] == '513']['EJ'].sum() / 1_000_000
-    base[('32301','foto')]   = p32301[p32301['ID_UNIDAD'] != '513']['EJ'].sum() / 1_000_000
-    p33602 = sc[sc['P5'] == 33602]
-    base[('33602','foto')]   = p33602[p33602['ID_UNIDAD'] == '512']['EJ'].sum() / 1_000_000
+    base[('32301','arrend')] = p32301[p32301['ID_UNIDAD'] == '513']['EJERCIDO'].sum() / 1_000_000
+    base[('32301','foto')]   = p32301[p32301['ID_UNIDAD'] != '513']['EJERCIDO'].sum() / 1_000_000
+    base[('33602','foto')]   = 0.0
 
-    print(f"   SICOP 2026: {len(sc['P5'].unique())} partidas")
+    print(f"   SICOP 2026: {len(sc['P5'].unique())} partidas (SC + G00)")
     return base
 
 def detectar_corte(path):
@@ -462,7 +478,7 @@ def generar_austeridad(ruta_cp, ruta_sicop, ruta_salida=None):
         ruta_salida = os.path.join(os.getcwd(),
             f"FORMATO_AUSTERIDAD_{abr3}-{str(anio)[2:]}.xlsx")
     wb.save(ruta_salida)
-    print(f"\n✅ Archivo generado: {ruta_salida}")
+    print(f"\n Archivo generado: {ruta_salida}")
     return ruta_salida
 
 # ══════════════════════════════════════════════════════════════════════
@@ -500,7 +516,7 @@ def _colab_main():
     with open(r2,'wb') as f: f.write(c2)
     print(f'    {n2}')
     rout = generar_austeridad(r1, r2)
-    print('\n  Descargando...')
+    print('\n⬇️  Descargando...')
     _f_.download(rout)
     print(' ¡Listo!')
 
