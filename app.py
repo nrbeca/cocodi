@@ -73,7 +73,7 @@ if archivo_map:
                 mes_str = MESES_ES[fecha["mes"]].upper()
                 nombre_out = f"CUADROS_COCODI_{fecha['dia']:02d}-{mes_str}-{fecha['anio']}.xlsx"
                 os.unlink(ruta_tmp)
-                st.success(f"✅ Cuadros generados — corte al {tf['dia_mes_anio']}")
+                st.success(f" Cuadros generados — corte al {tf['dia_mes_anio']}")
                 st.download_button(label=f"⬇️  Descargar {nombre_out}", data=buf,
                     file_name=nombre_out, mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     key="dl_cocodi")
@@ -82,7 +82,7 @@ if archivo_map:
 
 # ── SECCIÓN 2: Formato de Austeridad ─────────────────────────────────
 st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
-st.markdown("## 📋 Formato de Austeridad")
+st.markdown("##  Formato de Austeridad")
 st.markdown(
     "<div class='info-box'>"
     "Sube el <b>SICOP del corte actual 2026</b> (CSV) para generar el Formato de Austeridad "
@@ -109,7 +109,7 @@ if archivo_sicop:
                 corte = detectar_corte(ruta_sicop)
                 nombre_aust = f"FORMATO_AUSTERIDAD_{corte['abr3']}-{str(corte['anio'])[2:]}.xlsx"
                 os.unlink(ruta_sicop); os.unlink(ruta_out); os.rmdir(tmpdir)
-                st.success(f"✅ Formato generado — corte al {corte['dia']} de {corte['mes_es']} de {corte['anio']}")
+                st.success(f" Formato generado — corte al {corte['dia']} de {corte['mes_es']} de {corte['anio']}")
                 st.download_button(label=f"⬇️  Descargar {nombre_aust}", data=buf,
                     file_name=nombre_aust, mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     key="dl_aust")
