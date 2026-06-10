@@ -9,7 +9,7 @@ import importlib, subprocess, sys as _sys
 def _ensure(pkg):
     try: importlib.import_module(pkg)
     except ImportError:
-        print(f"  📦 Instalando {pkg}...")
+        print(f"   Instalando {pkg}...")
         subprocess.check_call([_sys.executable, "-m", "pip", "install", pkg, "-q"])
 _ensure("openpyxl"); _ensure("pandas")
 
@@ -210,7 +210,7 @@ def _leer_csv(path):
 
 def leer_sicop2026(path):
     """SICOP 2026 — SC + G00 — EJERCIDO + EJERCIDO_TRAMITE"""
-    print("  📊 Leyendo SICOP 2026...")
+    print("   Leyendo SICOP 2026...")
     df = _leer_csv(path)
     df = df.copy()
     df['P5']     = (df['CAPITULO'].astype(int)*10000 + df['CONCEPTO'].astype(int)*1000 +
@@ -229,7 +229,7 @@ def leer_sicop2026(path):
     p33602 = sc[sc['P5']==33602]
     base[('33602','foto')]   = p33602[p33602['ID_UNIDAD']=='512']['EJ'].sum() / 1_000_000
 
-    print(f"  ✅ SICOP 2026: {len(sc['P5'].unique())} partidas (SC + G00)")
+    print(f"   SICOP 2026: {len(sc['P5'].unique())} partidas (SC + G00)")
     return base
 
 def detectar_corte(path):
@@ -294,7 +294,7 @@ def generar_austeridad(ruta_sicop, ruta_salida=None):
     ej26  = leer_sicop2026(ruta_sicop)
     corte = detectar_corte(ruta_sicop)
     d, m_es, abr3, anio = corte['dia'], corte['mes_es'], corte['abr3'], corte['anio']
-    print(f"  📅 Corte: {d} de {m_es} de {anio}")
+    print(f"   Corte: {d} de {m_es} de {anio}")
 
     # Construir tabla completa con valores D (2025 fijo) y E (2026 dinámico)
     # y calcular subtotales de grupo directamente
@@ -450,7 +450,7 @@ def generar_austeridad(ruta_sicop, ruta_salida=None):
         ruta_salida = os.path.join(os.getcwd(),
             f"FORMATO_AUSTERIDAD_{abr3}-{str(anio)[2:]}.xlsx")
     wb.save(ruta_salida)
-    print(f"\n✅ Archivo generado: {ruta_salida}")
+    print(f"\n Archivo generado: {ruta_salida}")
     return ruta_salida
 
 # ══════════════════════════════════════════════════════════════════════
@@ -471,17 +471,17 @@ def _colab_main():
     print('═'*55)
     print('  FORMATO AUSTERIDAD — SADER')
     print('═'*55)
-    print('\n📂 Sube el CSV del SICOP corte actual 2026:')
+    print('\n Sube el CSV del SICOP corte actual 2026:')
     sub = _f_.upload()
     if not sub: return
     n, c = next(iter(sub.items()))
     r = f'/content/{n}'
     with open(r,'wb') as f: f.write(c)
-    print(f'   ✅ {n}')
+    print(f'    {n}')
     rout = generar_austeridad(r)
-    print('\n⬇️  Descargando...')
+    print('\n  Descargando...')
     _f_.download(rout)
-    print('✅ ¡Listo!')
+    print(' ¡Listo!')
 
 if __name__ == '__main__':
     _colab_main()
