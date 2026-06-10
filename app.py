@@ -43,7 +43,7 @@ st.title("Reportes COCODI — SADER")
 # ── SECCIÓN 1: Cuadros COCODI ─────────────────────────────────────────
 st.markdown("##  Generador de Cuadros COCODI")
 st.markdown(
-    "<div class='info-box'>Sube el archivo MAP del día (<b>.csv</b> o <b>.xlsx</b> con hojas TD) "
+    "<div class='info-box'>Sube el archivo MAP del día (<b>.csv</b> o <b>.xlsx</b>) "
     "y descarga el Excel con las 4 hojas: <b>Pp</b>, <b>Pp y CAP</b>, "
     "<b>AGRICULTURA</b> y <b>Presupuesto Comisario</b>.</div>",
     unsafe_allow_html=True,
@@ -85,8 +85,8 @@ st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
 st.markdown("##  Formato de Austeridad")
 st.markdown(
     "<div class='info-box'>"
-    "Sube el <b>SICOP del corte actual 2026</b> (CSV) para generar el Formato de Austeridad "
-    "(Art. 10 LFAR). Los valores de la Cuenta Pública 2025 ya están incorporados — "
+    "Sube el <b>SICOP del corte actual 2026</b> (CSV) para generar el Formato de Austeridad. "
+    "Los valores de la Cuenta Pública 2025 ya están incorporados — "
     "solo necesitas el SICOP del mes actual."
     "</div>",
     unsafe_allow_html=True,
