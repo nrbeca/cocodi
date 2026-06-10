@@ -86,7 +86,7 @@ st.markdown("##  Formato de Austeridad")
 st.markdown(
     "<div class='info-box'>"
     "Sube el <b>SICOP del corte actual 2026</b> (CSV) para generar el Formato de Austeridad "
-    "(Art. 10 LFAR). Los valores de la Cuenta Pública 2025 ya están incorporados — "
+    ". Los valores de la Cuenta Pública 2025 ya están incorporados — "
     "solo necesitas el SICOP del mes actual."
     "</div>",
     unsafe_allow_html=True,
