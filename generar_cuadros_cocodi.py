@@ -21,7 +21,7 @@ def _ensure(pkg):
     try:
         importlib.import_module(pkg)
     except ImportError:
-        print(f"   Instalando {pkg}...")
+        print(f"  Instalando {pkg}...")
         subprocess.check_call([_sys.executable, "-m", "pip", "install", pkg, "-q"])
 
 _ensure("openpyxl")
@@ -2553,10 +2553,10 @@ def _sf(v):
     except: return 0.0
 
 def leer_xlsx_map(path: str) -> dict:
-    print("   Procesando xlsx con hojas TD...")
+    print("  📊 Procesando xlsx con hojas TD...")
     xl = pd.ExcelFile(path)
     hojas = xl.sheet_names
-    print(f"   Hojas: {hojas}")
+    print(f"  📋 Hojas: {hojas}")
 
     def td(kws):
         for h in hojas:
@@ -2919,14 +2919,33 @@ def hoja_pp_cap(wb_out, datos, tf, tpl):
         ("S304", [(4000,81)], 82),
         ("S318", [(4000,88)], 89),
     ]
+    from openpyxl.styles import Font, PatternFill
+    COLOR_TOTAL_CAP = "BC955C"   # café — color de filas Total por Pp
+
     for pp_k, cap_filas, total_fila in configs:
         for c, fila in cap_filas:
             set_row(fila, pc.get((pp_k, c), {}))
             ws.cell(fila, 1).value = f"{pp_k}{c}"
-            ws.cell(fila, 2).value = c   # número de capítulo en col B
+            ws.cell(fila, 2).value = c
+            # Limpiar fill/bold que pudiera haber heredado del template
+            for col_idx in range(1, 10):
+                cell = ws.cell(fila, col_idx)
+                cell.fill = PatternFill(fill_type=None)
+                if cell.font:
+                    cell.font = Font(name=cell.font.name, size=cell.font.size,
+                                     bold=False, color=cell.font.color.rgb
+                                     if cell.font.color and cell.font.color.type == 'rgb'
+                                     else '000000')
+        # Fila Total: fill café, bold
         ws.cell(total_fila, 1).value = None
         ws.cell(total_fila, 2).value = "Total"
         set_row(total_fila, pp.get(pp_k, {}))
+        for col_idx in range(1, 10):
+            cell = ws.cell(total_fila, col_idx)
+            cell.fill = PatternFill('solid', fgColor=COLOR_TOTAL_CAP)
+            cell.font = Font(name=cell.font.name if cell.font else 'Calibri',
+                             size=cell.font.size if cell.font else 11,
+                             bold=True)
 
     if 'Pp y CAP' in wb_out.sheetnames: del wb_out['Pp y CAP']
     ws_n = wb_out.create_sheet('Pp y CAP')
