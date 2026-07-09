@@ -21,7 +21,7 @@ def _ensure(pkg):
     try:
         importlib.import_module(pkg)
     except ImportError:
-        print(f"  📦 Instalando {pkg}...")
+        print(f"   Instalando {pkg}...")
         subprocess.check_call([_sys.executable, "-m", "pip", "install", pkg, "-q"])
 
 _ensure("openpyxl")
@@ -2553,10 +2553,10 @@ def _sf(v):
     except: return 0.0
 
 def leer_xlsx_map(path: str) -> dict:
-    print("  📊 Procesando xlsx con hojas TD...")
+    print("   Procesando xlsx con hojas TD...")
     xl = pd.ExcelFile(path)
     hojas = xl.sheet_names
-    print(f"  📋 Hojas: {hojas}")
+    print(f"   Hojas: {hojas}")
 
     def td(kws):
         for h in hojas:
@@ -2694,7 +2694,7 @@ def _bloques_td(df: pd.DataFrame) -> dict:
                 try:
                     cl = int(float(str(cv)))
                     pc = float(pv) if pd.notna(pv) else 0.0
-                    nm = str(nv) if pd.notna(nv) else NOMBRES_PARTIDAS.get(cl, f"Partida {cl}")
+                    nm = str(nv).strip() if pd.notna(nv) else NOMBRES_PARTIDAS.get(cl, f"Partida {cl}")
                     parts.append(dict(clave=cl, nombre=nm, pct=pc))
                 except:
                     if parts: break
@@ -2911,7 +2911,7 @@ def hoja_pp_cap(wb_out, datos, tf, tpl):
 
     # Tablas por Pp (filas por plantilla de Libro2)
     configs = [
-        ("P021", [(1000,32),(2000,33),(3000,34)], 35),
+        ("P021", [(1000,32),(2000,33),(3000,34),(4000,35)], 36),
         ("M001", [(1000,41),(2000,42),(3000,43)], 44),
         ("K017", [(7000,55)], 56),
         ("S292", [(1000,62),(2000,63),(3000,64),(4000,65)], 66),
@@ -2922,6 +2922,10 @@ def hoja_pp_cap(wb_out, datos, tf, tpl):
     for pp_k, cap_filas, total_fila in configs:
         for c, fila in cap_filas:
             set_row(fila, pc.get((pp_k, c), {}))
+            ws.cell(fila, 1).value = f"{pp_k}{c}"
+            ws.cell(fila, 2).value = c   # número de capítulo en col B
+        ws.cell(total_fila, 1).value = None
+        ws.cell(total_fila, 2).value = "Total"
         set_row(total_fila, pp.get(pp_k, {}))
 
     if 'Pp y CAP' in wb_out.sheetnames: del wb_out['Pp y CAP']
@@ -3036,13 +3040,14 @@ def hoja_comisario(wb_out, datos, tf, tpl):
         if pp_k == "K017":
             mot = "La variación se encuentra en la partida 79902 Provisiones para erogaciones especiales."
         elif pp_k in ["S304","S318","S292","S293"]:
-            mot = motivo_cap(bloq.get(4000, {}), 4)
+            mot = "El 100.0% de la variación se observa en las partidas:\n43101 Subsidios a la producción."
         else:
             mot = motivo_cap(bloq.get(1000, {}), 5)
         ws.cell(fila, 9).value = mot
 
     # ── Tabla 2: datos por Capítulo (cols L-R, filas 9-13) ───────────
-    # Fuente: TD Comisario cols 94+ → ORI_P=col95, MOD_P=col96, EJE=col97, DISP=col98
+    # Fuente: TD AGRICULTURA = totales del Sector Central por capítulo
+    # col D=MOD_P (autorizado al periodo), col E=EJERCIDO, col F=DISPONIBLE
     cap_nombres = {
         1000: "Servicios personales",
         2000: "Materiales y suministros",
@@ -3051,26 +3056,20 @@ def hoja_comisario(wb_out, datos, tf, tpl):
         7000: "Inversiones financieras y otras provisiones",
     }
     n_parts_com = {1000:5, 2000:4, 3000:5, 4000:4, 7000:0}
-    cap_com = datos.get("cap_com", {})
-    # Si no hay cap_com (CSV), fallback a cap_dict con MOD_P
-    if not cap_com:
-        cap_com = {c: dict(original_p=d.get("modificado_p",0),
-                           modificado_p=d.get("modificado_p",0),
-                           ejercido=d.get("ejercido",0))
-                   for c, d in cap.items()}
 
     for cap_k, fila in [(1000,9),(2000,10),(3000,11),(4000,12),(7000,13)]:
-        dc = cap_com.get(cap_k, {})
-        ori_p = dc.get("original_p", 0) or 0
-        mod_p = dc.get("modificado_p", 0) or 0
+        # Usar cap_dict (TD AGRICULTURA): mod_p=modificado_p, ejrc=ejercido
+        dc    = cap.get(cap_k, {})
+        ori_p = dc.get("modificado_p", dc.get("original_p", 0)) or 0
+        mod_p = ori_p   # en el manual N=O (mismo valor para Autorizado y Programado)
         ejrc  = dc.get("ejercido", 0) or 0
 
-        ws.cell(fila, 12).value = cap_k            # col L = clave
-        ws.cell(fila, 13).value = cap_nombres[cap_k]  # col M = nombre
-        ws.cell(fila, 14).value = ori_p            # col N = ORI_P
-        ws.cell(fila, 15).value = mod_p            # col O = MOD_P
-        ws.cell(fila, 16).value = ejrc             # col P = EJE
-        ws.cell(fila, 17).value = _var(mod_p, ejrc)  # col Q = %var
+        ws.cell(fila, 12).value = cap_k
+        ws.cell(fila, 13).value = cap_nombres[cap_k]
+        ws.cell(fila, 14).value = ori_p      # col N = Autorizado al periodo
+        ws.cell(fila, 15).value = mod_p      # col O = Programado (= Autorizado)
+        ws.cell(fila, 16).value = ejrc       # col P = Ejercido
+        ws.cell(fila, 17).value = _var(mod_p, ejrc)  # col Q = % var
 
         if cap_k == 7000:
             mot2 = ("La variación se encuentra en la partida 79902 "
@@ -3095,7 +3094,7 @@ def generar_cuadros(ruta_entrada: str, ruta_salida: str = None,
     Lee la base MAP del día (CSV o xlsx) y genera los 4 cuadros.
     Los templates están embebidos — no se necesitan archivos externos.
     """
-    print(f"📂 Leyendo: {ruta_entrada}")
+    print(f" Leyendo: {ruta_entrada}")
 
     # Fecha
     if mes_corte and anio_corte:
@@ -3103,7 +3102,7 @@ def generar_cuadros(ruta_entrada: str, ruta_salida: str = None,
     else:
         fecha = detectar_fecha(ruta_entrada)
     tf = textos_fecha(fecha)
-    print(f"📅 Fecha de corte: {tf['dia_mes_anio']}")
+    print(f" Fecha de corte: {tf['dia_mes_anio']}")
 
     # Leer datos
     ext = os.path.splitext(ruta_entrada)[1].lower()
@@ -3112,7 +3111,7 @@ def generar_cuadros(ruta_entrada: str, ruta_salida: str = None,
     else:
         datos = leer_xlsx_map(ruta_entrada)
     datos['_mes'] = fecha["mes"]
-    print(f"✅ {len(datos['pp'])-1} Pp, {len(datos['cap'])} capítulos")
+    print(f" {len(datos['pp'])-1} Pp, {len(datos['cap'])} capítulos")
 
     # Templates embebidos — no se necesitan archivos externos
     tpls = {
@@ -3125,16 +3124,16 @@ def generar_cuadros(ruta_entrada: str, ruta_salida: str = None,
     wb_out = openpyxl.Workbook()
     if "Sheet" in wb_out.sheetnames: del wb_out["Sheet"]
 
-    print("📊 Generando Pp...")
+    print(" Generando Pp...")
     hoja_pp(wb_out, datos, tf, tpls['Pp'])
 
-    print("📊 Generando Pp y CAP...")
+    print(" Generando Pp y CAP...")
     hoja_pp_cap(wb_out, datos, tf, tpls['PpCAP'])
 
-    print("📊 Generando AGRICULTURA...")
+    print(" Generando AGRICULTURA...")
     hoja_agricultura(wb_out, datos, tf, tpls['AGRICULTURA'])
 
-    print("📊 Generando Presupuesto Comisario...")
+    print(" Generando Presupuesto Comisario...")
     hoja_comisario(wb_out, datos, tf, tpls['Comisario'])
 
     # Salida
@@ -3145,7 +3144,7 @@ def generar_cuadros(ruta_entrada: str, ruta_salida: str = None,
         ruta_salida = os.path.join(carpeta, nombre_out)
 
     wb_out.save(ruta_salida)
-    print(f"\n✅ Archivo generado: {ruta_salida}")
+    print(f"\n Archivo generado: {ruta_salida}")
     return ruta_salida
 
 
@@ -3163,7 +3162,7 @@ def _colab_main():
         if args:
             generar_cuadros(args[0])
         else:
-            ruta = input("📂 Ruta del archivo MAP (.csv o .xlsx): ").strip()
+            ruta = input(" Ruta del archivo MAP (.csv o .xlsx): ").strip()
             if ruta:
                 generar_cuadros(ruta)
         return
@@ -3172,10 +3171,10 @@ def _colab_main():
     print("  GENERADOR DE CUADROS COCODI — SADER MAP 2026")
     print("═" * 55)
     print()
-    print("📂 Selecciona el archivo MAP del día (.csv o .xlsx):")
+    print(" Selecciona el archivo MAP del día (.csv o .xlsx):")
     sub = _f.upload()
     if not sub:
-        print("⚠️  No se subió ningún archivo.")
+        print("  No se subió ningún archivo.")
         return
 
     nombre, contenido = next(iter(sub.items()))
@@ -3186,10 +3185,10 @@ def _colab_main():
     print()
     ruta_out = generar_cuadros(ruta)
     print()
-    print("⬇️  Descargando archivo generado...")
+    print("  Descargando archivo generado...")
     _f.download(ruta_out)
     print()
-    print("✅ ¡Listo! Revisa tu carpeta de descargas.")
+    print(" ¡Listo! Revisa tu carpeta de descargas.")
 
 
 if __name__ == "__main__":
