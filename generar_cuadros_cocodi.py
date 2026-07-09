@@ -21,7 +21,7 @@ def _ensure(pkg):
     try:
         importlib.import_module(pkg)
     except ImportError:
-        print(f"  Instalando {pkg}...")
+        print(f"   Instalando {pkg}...")
         subprocess.check_call([_sys.executable, "-m", "pip", "install", pkg, "-q"])
 
 _ensure("openpyxl")
@@ -2553,10 +2553,10 @@ def _sf(v):
     except: return 0.0
 
 def leer_xlsx_map(path: str) -> dict:
-    print("  📊 Procesando xlsx con hojas TD...")
+    print("   Procesando xlsx con hojas TD...")
     xl = pd.ExcelFile(path)
     hojas = xl.sheet_names
-    print(f"  📋 Hojas: {hojas}")
+    print(f"   Hojas: {hojas}")
 
     def td(kws):
         for h in hojas:
