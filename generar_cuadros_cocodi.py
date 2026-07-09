@@ -2473,7 +2473,7 @@ def textos_fecha(f: dict) -> dict:
 # ══════════════════════════════════════════════════════════════════════
 
 def leer_csv_map(path: str, mes_corte: int) -> dict:
-    print(f"  📊 Procesando CSV (corte mes {mes_corte})...")
+    print(f"   Procesando CSV (corte mes {mes_corte})...")
     try:
         df = pd.read_csv(path, encoding='utf-8')
     except UnicodeDecodeError:
@@ -2553,10 +2553,13 @@ def _sf(v):
     except: return 0.0
 
 def leer_xlsx_map(path: str) -> dict:
-    print("  📊 Procesando xlsx con hojas TD...")
+    print("   Procesando xlsx con hojas TD...")
+    import openpyxl as _opxl
     xl = pd.ExcelFile(path)
     hojas = xl.sheet_names
-    print(f"  📋 Hojas: {hojas}")
+    print(f"   Hojas: {hojas}")
+    # Abrir con openpyxl una sola vez para lectura de columnas con nombre
+    _wb = _opxl.load_workbook(path, data_only=True, read_only=True)
 
     def td(kws):
         for h in hojas:
@@ -2639,35 +2642,27 @@ def leer_xlsx_map(path: str) -> dict:
             if k in pp_rows:
                 pp_rows[k]['original_p'] = ori_p
 
-    # ── TD Comisario caps: TWO blocks at cols 94+
-    # Block 1 (header R2):  col94=CAP, 95=ORI_A, 96=MOD_A, 97=ORI_P, 98=MOD_P, 99=EJE, 100=DISP
-    # Block 2 (header R13): col94=CAP, 95=ORI_P, 96=MOD_P, 97=EJE, 98=DISP  <- CORRECT for Comisario
-    # We use Block 2 which starts after R13
+    # ── TD Comisario caps: leer bloque 1 por columnas CQ/CT/CU/CV ────
+    # CQ=col95, CT=col98=ORIGINAL_P, CU=col99=MODIFICADO_P, CV=col100=EJERCIDO, CW=col101=DISP
+    # (índices 0-based: CQ=94, CT=97, CU=98, CV=99, CW=100)
     cap_com = {}
-    in_block2 = False
-    seen_cap_com = set()
-    for i in range(len(df_com)):
-        c94 = df_com.iloc[i, 94] if df_com.shape[1] > 94 else None
-        if not pd.notna(c94): continue
-        # Detect start of block 2
-        if str(c94).strip() == 'Etiquetas de fila':
-            # Check if this is the second header (col95=ORI_P not ORI_ANUAL)
-            c95 = str(df_com.iloc[i, 95]) if df_com.shape[1] > 95 else ''
-            if 'ORIGINAL P' in c95.upper() or 'ORI_P' in c95.upper():
-                in_block2 = True
-            continue
-        if in_block2:
-            try:
-                c = int(float(str(c94)))
-                if c in CAPITULOS and c not in seen_cap_com:
-                    ori_p = _sf(df_com.iloc[i, 95])
-                    mod_p = _sf(df_com.iloc[i, 96])
-                    eje   = _sf(df_com.iloc[i, 97])
-                    disp  = _sf(df_com.iloc[i, 98]) if df_com.shape[1] > 98 else mod_p - eje
-                    seen_cap_com.add(c)
-                    cap_com[c] = dict(original_p=ori_p, modificado_p=mod_p,
-                                      ejercido=eje, disponible=disp)
-            except: pass
+    try:
+        _ws_td = _wb['TD Presupuesto Comisario']
+        for row in _ws_td.iter_rows():
+            row = list(row)
+            if len(row) <= 100: continue
+            cq_val = row[94].value  # col CQ
+            if cq_val in CAPITULOS and cq_val not in cap_com:
+                cap_com[int(cq_val)] = dict(
+                    original_p  = _sf(row[97].value),   # CT
+                    modificado_p= _sf(row[98].value),   # CU
+                    ejercido    = _sf(row[99].value),   # CV
+                    disponible  = _sf(row[100].value),  # CW
+                )
+    except Exception as _e:
+        print(f"    cap_com: {_e}")
+    finally:
+        _wb.close()
 
     bloques = _bloques_td(df_agr)
     return dict(pp=pp_rows, cap=cap_dict, pp_cap=pp_cap,
@@ -2920,14 +2915,24 @@ def hoja_pp_cap(wb_out, datos, tf, tpl):
         ("S318", [(4000,88)], 89),
     ]
     from openpyxl.styles import Font, PatternFill
-    COLOR_TOTAL_CAP = "BC955C"   # café — color de filas Total por Pp
+    COLOR_TOTAL_CAP = "BC955C"
+
+    CAP_DENOM = {1000:"Servicios Personales", 2000:"Materiales y Suministros",
+                 3000:"Servicios Generales",
+                 4000:"Transferencias, asignaciones, subsidios y otras ayudas",
+                 7000:"Inversiones financieras y otras provisiones"}
 
     for pp_k, cap_filas, total_fila in configs:
         for c, fila in cap_filas:
             set_row(fila, pc.get((pp_k, c), {}))
             ws.cell(fila, 1).value = f"{pp_k}{c}"
             ws.cell(fila, 2).value = c
-            # Limpiar fill/bold que pudiera haber heredado del template
+            # Col C puede estar combinada — desmerge antes de escribir
+            for mg in list(ws.merged_cells.ranges):
+                if mg.min_row <= fila <= mg.max_row and mg.min_col <= 3 <= mg.max_col:
+                    ws.unmerge_cells(str(mg))
+            ws.cell(fila, 3).value = CAP_DENOM.get(c, '')
+            # Limpiar fill/bold heredado del template
             for col_idx in range(1, 10):
                 cell = ws.cell(fila, col_idx)
                 cell.fill = PatternFill(fill_type=None)
@@ -2939,6 +2944,11 @@ def hoja_pp_cap(wb_out, datos, tf, tpl):
         # Fila Total: fill café, bold
         ws.cell(total_fila, 1).value = None
         ws.cell(total_fila, 2).value = "Total"
+        # Desmerge col C si está combinada
+        for mg in list(ws.merged_cells.ranges):
+            if mg.min_row <= total_fila <= mg.max_row and mg.min_col <= 3 <= mg.max_col:
+                ws.unmerge_cells(str(mg))
+        ws.cell(total_fila, 3).value = None
         set_row(total_fila, pp.get(pp_k, {}))
         for col_idx in range(1, 10):
             cell = ws.cell(total_fila, col_idx)
@@ -3065,8 +3075,8 @@ def hoja_comisario(wb_out, datos, tf, tpl):
         ws.cell(fila, 9).value = mot
 
     # ── Tabla 2: datos por Capítulo (cols L-R, filas 9-13) ───────────
-    # Fuente: TD AGRICULTURA = totales del Sector Central por capítulo
-    # col D=MOD_P (autorizado al periodo), col E=EJERCIDO, col F=DISPONIBLE
+    # Fuente: TD Comisario bloque 1 (cols CQ/CT/CU/CV)
+    # N=CT=ORIGINAL_P, O=CU=MODIFICADO_P, P=CV=EJERCIDO, Q=(P-O)/O
     cap_nombres = {
         1000: "Servicios personales",
         2000: "Materiales y suministros",
@@ -3075,20 +3085,20 @@ def hoja_comisario(wb_out, datos, tf, tpl):
         7000: "Inversiones financieras y otras provisiones",
     }
     n_parts_com = {1000:5, 2000:4, 3000:5, 4000:4, 7000:0}
+    cap_com = datos.get("cap_com", {})
 
     for cap_k, fila in [(1000,9),(2000,10),(3000,11),(4000,12),(7000,13)]:
-        # Usar cap_dict (TD AGRICULTURA): mod_p=modificado_p, ejrc=ejercido
-        dc    = cap.get(cap_k, {})
-        ori_p = dc.get("modificado_p", dc.get("original_p", 0)) or 0
-        mod_p = ori_p   # en el manual N=O (mismo valor para Autorizado y Programado)
-        ejrc  = dc.get("ejercido", 0) or 0
+        dc    = cap_com.get(cap_k, {})
+        ori_p = dc.get("original_p", 0) or 0    # N
+        mod_p = dc.get("modificado_p", 0) or 0  # O
+        ejrc  = dc.get("ejercido", 0) or 0       # P
 
         ws.cell(fila, 12).value = cap_k
         ws.cell(fila, 13).value = cap_nombres[cap_k]
-        ws.cell(fila, 14).value = ori_p      # col N = Autorizado al periodo
-        ws.cell(fila, 15).value = mod_p      # col O = Programado (= Autorizado)
-        ws.cell(fila, 16).value = ejrc       # col P = Ejercido
-        ws.cell(fila, 17).value = _var(mod_p, ejrc)  # col Q = % var
+        ws.cell(fila, 14).value = ori_p      # N = ORIGINAL_P
+        ws.cell(fila, 15).value = mod_p      # O = MODIFICADO_P
+        ws.cell(fila, 16).value = ejrc       # P = EJERCIDO
+        ws.cell(fila, 17).value = _var(mod_p, ejrc)  # Q = (P-O)/O
 
         if cap_k == 7000:
             mot2 = ("La variación se encuentra en la partida 79902 "
@@ -3204,7 +3214,7 @@ def _colab_main():
     print()
     ruta_out = generar_cuadros(ruta)
     print()
-    print(" Descargando archivo generado...")
+    print("  Descargando archivo generado...")
     _f.download(ruta_out)
     print()
     print(" ¡Listo! Revisa tu carpeta de descargas.")
