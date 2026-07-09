@@ -2473,7 +2473,7 @@ def textos_fecha(f: dict) -> dict:
 # ══════════════════════════════════════════════════════════════════════
 
 def leer_csv_map(path: str, mes_corte: int) -> dict:
-    print(f"   Procesando CSV (corte mes {mes_corte})...")
+    print(f"  📊 Procesando CSV (corte mes {mes_corte})...")
     try:
         df = pd.read_csv(path, encoding='utf-8')
     except UnicodeDecodeError:
@@ -2553,10 +2553,10 @@ def _sf(v):
     except: return 0.0
 
 def leer_xlsx_map(path: str) -> dict:
-    print("   Procesando xlsx con hojas TD...")
+    print("  📊 Procesando xlsx con hojas TD...")
     xl = pd.ExcelFile(path)
     hojas = xl.sheet_names
-    print(f"   Hojas: {hojas}")
+    print(f"  📋 Hojas: {hojas}")
 
     def td(kws):
         for h in hojas:
@@ -2694,7 +2694,7 @@ def _bloques_td(df: pd.DataFrame) -> dict:
                 try:
                     cl = int(float(str(cv)))
                     pc = float(pv) if pd.notna(pv) else 0.0
-                    nm = str(nv).strip() if pd.notna(nv) else NOMBRES_PARTIDAS.get(cl, f"Partida {cl}")
+                    nm = str(nv) if pd.notna(nv) else NOMBRES_PARTIDAS.get(cl, f"Partida {cl}")
                     parts.append(dict(clave=cl, nombre=nm, pct=pc))
                 except:
                     if parts: break
@@ -2911,7 +2911,7 @@ def hoja_pp_cap(wb_out, datos, tf, tpl):
 
     # Tablas por Pp (filas por plantilla de Libro2)
     configs = [
-        ("P021", [(1000,32),(2000,33),(3000,34),(4000,35)], 36),
+        ("P021", [(1000,32),(2000,33),(3000,34)], 35),
         ("M001", [(1000,41),(2000,42),(3000,43)], 44),
         ("K017", [(7000,55)], 56),
         ("S292", [(1000,62),(2000,63),(3000,64),(4000,65)], 66),
@@ -2919,33 +2919,10 @@ def hoja_pp_cap(wb_out, datos, tf, tpl):
         ("S304", [(4000,81)], 82),
         ("S318", [(4000,88)], 89),
     ]
-    from openpyxl.styles import Font, PatternFill
-    COLOR_TOTAL_CAP = "BC955C"   # café — color de filas Total por Pp
-
     for pp_k, cap_filas, total_fila in configs:
         for c, fila in cap_filas:
             set_row(fila, pc.get((pp_k, c), {}))
-            ws.cell(fila, 1).value = f"{pp_k}{c}"
-            ws.cell(fila, 2).value = c
-            # Limpiar fill/bold que pudiera haber heredado del template
-            for col_idx in range(1, 10):
-                cell = ws.cell(fila, col_idx)
-                cell.fill = PatternFill(fill_type=None)
-                if cell.font:
-                    cell.font = Font(name=cell.font.name, size=cell.font.size,
-                                     bold=False, color=cell.font.color.rgb
-                                     if cell.font.color and cell.font.color.type == 'rgb'
-                                     else '000000')
-        # Fila Total: fill café, bold
-        ws.cell(total_fila, 1).value = None
-        ws.cell(total_fila, 2).value = "Total"
         set_row(total_fila, pp.get(pp_k, {}))
-        for col_idx in range(1, 10):
-            cell = ws.cell(total_fila, col_idx)
-            cell.fill = PatternFill('solid', fgColor=COLOR_TOTAL_CAP)
-            cell.font = Font(name=cell.font.name if cell.font else 'Calibri',
-                             size=cell.font.size if cell.font else 11,
-                             bold=True)
 
     if 'Pp y CAP' in wb_out.sheetnames: del wb_out['Pp y CAP']
     ws_n = wb_out.create_sheet('Pp y CAP')
@@ -3059,14 +3036,13 @@ def hoja_comisario(wb_out, datos, tf, tpl):
         if pp_k == "K017":
             mot = "La variación se encuentra en la partida 79902 Provisiones para erogaciones especiales."
         elif pp_k in ["S304","S318","S292","S293"]:
-            mot = "El 100.0% de la variación se observa en las partidas:\n43101 Subsidios a la producción."
+            mot = motivo_cap(bloq.get(4000, {}), 4)
         else:
             mot = motivo_cap(bloq.get(1000, {}), 5)
         ws.cell(fila, 9).value = mot
 
     # ── Tabla 2: datos por Capítulo (cols L-R, filas 9-13) ───────────
-    # Fuente: TD AGRICULTURA = totales del Sector Central por capítulo
-    # col D=MOD_P (autorizado al periodo), col E=EJERCIDO, col F=DISPONIBLE
+    # Fuente: TD Comisario cols 94+ → ORI_P=col95, MOD_P=col96, EJE=col97, DISP=col98
     cap_nombres = {
         1000: "Servicios personales",
         2000: "Materiales y suministros",
@@ -3075,20 +3051,26 @@ def hoja_comisario(wb_out, datos, tf, tpl):
         7000: "Inversiones financieras y otras provisiones",
     }
     n_parts_com = {1000:5, 2000:4, 3000:5, 4000:4, 7000:0}
+    cap_com = datos.get("cap_com", {})
+    # Si no hay cap_com (CSV), fallback a cap_dict con MOD_P
+    if not cap_com:
+        cap_com = {c: dict(original_p=d.get("modificado_p",0),
+                           modificado_p=d.get("modificado_p",0),
+                           ejercido=d.get("ejercido",0))
+                   for c, d in cap.items()}
 
     for cap_k, fila in [(1000,9),(2000,10),(3000,11),(4000,12),(7000,13)]:
-        # Usar cap_dict (TD AGRICULTURA): mod_p=modificado_p, ejrc=ejercido
-        dc    = cap.get(cap_k, {})
-        ori_p = dc.get("modificado_p", dc.get("original_p", 0)) or 0
-        mod_p = ori_p   # en el manual N=O (mismo valor para Autorizado y Programado)
+        dc = cap_com.get(cap_k, {})
+        ori_p = dc.get("original_p", 0) or 0
+        mod_p = dc.get("modificado_p", 0) or 0
         ejrc  = dc.get("ejercido", 0) or 0
 
-        ws.cell(fila, 12).value = cap_k
-        ws.cell(fila, 13).value = cap_nombres[cap_k]
-        ws.cell(fila, 14).value = ori_p      # col N = Autorizado al periodo
-        ws.cell(fila, 15).value = mod_p      # col O = Programado (= Autorizado)
-        ws.cell(fila, 16).value = ejrc       # col P = Ejercido
-        ws.cell(fila, 17).value = _var(mod_p, ejrc)  # col Q = % var
+        ws.cell(fila, 12).value = cap_k            # col L = clave
+        ws.cell(fila, 13).value = cap_nombres[cap_k]  # col M = nombre
+        ws.cell(fila, 14).value = ori_p            # col N = ORI_P
+        ws.cell(fila, 15).value = mod_p            # col O = MOD_P
+        ws.cell(fila, 16).value = ejrc             # col P = EJE
+        ws.cell(fila, 17).value = _var(mod_p, ejrc)  # col Q = %var
 
         if cap_k == 7000:
             mot2 = ("La variación se encuentra en la partida 79902 "
@@ -3152,7 +3134,7 @@ def generar_cuadros(ruta_entrada: str, ruta_salida: str = None,
     print(" Generando AGRICULTURA...")
     hoja_agricultura(wb_out, datos, tf, tpls['AGRICULTURA'])
 
-    print(" Generando Presupuesto Comisario...")
+    print("Generando Presupuesto Comisario...")
     hoja_comisario(wb_out, datos, tf, tpls['Comisario'])
 
     # Salida
