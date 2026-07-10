@@ -2473,7 +2473,7 @@ def textos_fecha(f: dict) -> dict:
 # ══════════════════════════════════════════════════════════════════════
 
 def leer_csv_map(path: str, mes_corte: int) -> dict:
-    print(f"  📊 Procesando CSV (corte mes {mes_corte})...")
+    print(f"   Procesando CSV (corte mes {mes_corte})...")
     try:
         df = pd.read_csv(path, encoding='utf-8')
     except UnicodeDecodeError:
@@ -2661,13 +2661,53 @@ def leer_xlsx_map(path: str) -> dict:
                     disponible  = _sf(row[100].value),  # CW
                 )
     except Exception as _e:
-        print(f"  ⚠️  cap_com: {_e}")
+        print(f"    cap_com: {_e}")
     finally:
         _wb.close()
 
     bloques = _bloques_td(df_agr)
+
+    # ── Bloques por Pp del TD Comisario (para justificaciones cuadro 1) ──
+    bloques_pp = {}
+    try:
+        _wb2 = _opxl.load_workbook(path, data_only=True, read_only=True)
+        _ws_com = _wb2['TD Presupuesto Comisario']
+        # R27 tiene 'PP' en la col de inicio de cada bloque; R27+1 tiene el nombre del Pp
+        # Cada bloque ocupa 13 cols: A(PP), B(nombre), D(partida), E(monto), F(%), G(nombre_partida)
+        # R28 F = % total de variación del bloque
+        row27 = list(_ws_com[27])
+        for c in row27:
+            if c.value == 'PP':
+                sc   = c.column          # col inicio del bloque
+                pp   = _ws_com.cell(27, sc + 1).value
+                if not pp: continue
+                pct_total = _ws_com.cell(28, sc + 5).value or 0.0
+                parts = []
+                total_all = 0.0
+                for r in range(30, 160):
+                    partida = _ws_com.cell(r, sc + 3).value
+                    monto   = _ws_com.cell(r, sc + 4).value
+                    nombre  = _ws_com.cell(r, sc + 6).value
+                    if partida is None: continue
+                    if str(partida) == 'Total general': break
+                    m = float(monto or 0)
+                    if m > 0:
+                        total_all += m
+                        parts.append({'clave': partida,
+                                      'nombre': str(nombre or '').strip(),
+                                      'monto': m})
+                # Recalcular % de cada partida sobre el total real
+                for p in parts:
+                    p['pct'] = p['monto'] / total_all if total_all else 0
+                bloques_pp[pp] = {'pct_total': float(pct_total),
+                                  'partidas': parts,
+                                  'total_all': total_all}
+        _wb2.close()
+    except Exception as _e2:
+        print(f"    bloques_pp: {_e2}")
+
     return dict(pp=pp_rows, cap=cap_dict, pp_cap=pp_cap,
-                cap_com=cap_com, bloques=bloques)
+                cap_com=cap_com, bloques=bloques, bloques_pp=bloques_pp)
 
 
 def _bloques_td(df: pd.DataFrame) -> dict:
@@ -2707,6 +2747,25 @@ def motivo_cap(bloque: dict, n: int = 5) -> str:
     pct = sum(p["pct"] for p in parts)
     noms = [f"{p['clave']} {p['nombre']}" for p in parts]
     return f"El {pct*100:.1f}% de la variación se observa en las partidas:\n{', '.join(noms)}."
+
+def motivo_pp(bloque_pp: dict, n: int = 5) -> str:
+    """Genera el texto de justificación para un Pp del Comisario."""
+    if not bloque_pp: return ""
+    parts_con_nombre = [p for p in bloque_pp.get('partidas', [])
+                        if str(p.get('nombre', '')).strip()]
+    parts = parts_con_nombre[:n]
+    if not parts: return ""
+    noms = [f"{p['clave']} {str(p['nombre']).strip()}" for p in parts]
+
+    # Usar pct_total del bloque (R28) cuando existe — es el % pre-calculado en el TD
+    pct_total = bloque_pp.get('pct_total') or 0
+    if pct_total:
+        pct_show = pct_total
+    else:
+        # Recalcular: suma de % de las partidas con nombre sobre el total_all
+        pct_show = sum(p.get('pct', 0) for p in parts)
+
+    return f"El {pct_show*100:.1f} % de la variación se observa en las partidas:\n{', '.join(noms)}."
 
 def motivo_cap4000(datos: dict, tf: dict) -> str:
     lineas = []
@@ -3050,7 +3109,8 @@ def hoja_comisario(wb_out, datos, tf, tpl):
     ws['Q7'] = (f"Variación (%) entre lo programado y ejercido\n"
                 f"1 al {tf['dia_mes_anio']}")
 
-    # ── Tabla 1: datos por Pp (cols B-I, filas 9-15) ─────────────────
+    # ── Tabla 1: datos por Pp (cols A-I, filas 9-15) ─────────────────
+    bloques_pp = datos.get("bloques_pp", {})
     for pp_k, fila in [("M001",9),("P021",10),("K017",11),
                         ("S292",12),("S293",13),("S304",14),("S318",15)]:
         d = pp.get(pp_k, {})
@@ -3060,19 +3120,50 @@ def hoja_comisario(wb_out, datos, tf, tpl):
         mod_p  = d.get("modificado_p", 0) or 0
         ejrc   = d.get("ejercido", 0) or 0
 
-        ws.cell(fila, 3).value = orig_a
-        ws.cell(fila, 4).value = mod_a
-        ws.cell(fila, 5).value = orig_p
-        ws.cell(fila, 6).value = mod_p
-        ws.cell(fila, 7).value = ejrc
-        ws.cell(fila, 8).value = _var(mod_p, ejrc)
+        # Col A: clave del Pp (se escapa de la merged cell del template)
+        try: ws.cell(fila, 1).value = pp_k
+        except: pass
 
+        # Cuando orig_p es 0 y no hay datos reales, dejar en blanco (como #N/A del template)
+        if orig_p == 0 and mod_p == 0 and ejrc == 0:
+            ws.cell(fila, 3).value = None
+            ws.cell(fila, 4).value = None
+            ws.cell(fila, 5).value = None
+            ws.cell(fila, 6).value = None
+            ws.cell(fila, 7).value = None
+            ws.cell(fila, 8).value = _var(mod_p, ejrc)
+        else:
+            ws.cell(fila, 3).value = orig_a
+            ws.cell(fila, 4).value = mod_a
+            ws.cell(fila, 5).value = orig_p
+            ws.cell(fila, 6).value = mod_p
+            ws.cell(fila, 7).value = ejrc
+            ws.cell(fila, 8).value = _var(mod_p, ejrc)
+
+        # Col I: justificación con % correcto del TD Comisario por Pp
         if pp_k == "K017":
             mot = "La variación se encuentra en la partida 79902 Provisiones para erogaciones especiales."
-        elif pp_k in ["S304","S318","S292","S293"]:
-            mot = "El 100.0% de la variación se observa en las partidas:\n43101 Subsidios a la producción."
+        elif pp_k in ["S304","S318"]:
+            bp = bloques_pp.get(pp_k, {})
+            if bp and bp.get('pct_total'):
+                mot = motivo_pp(bp, 5)
+            else:
+                mot = "La variación se encuentra en la partida 43101 Subsidios a la producción."
+        elif pp_k in ["S292","S293"]:
+            bp = bloques_pp.get(pp_k, {})
+            # S293 no tiene pct_total, tomar top-3 (da 90.9%)
+            n_pp = 3 if not bp.get('pct_total') else 5
+            if bp and bp.get('partidas'):
+                mot = motivo_pp(bp, n_pp)
+            else:
+                mot = "La variación se encuentra en la partida 43101 Subsidios a la producción."
         else:
-            mot = motivo_cap(bloq.get(1000, {}), 5)
+            # M001, P021: pct_total del TD Comisario por Pp, top-5
+            bp = bloques_pp.get(pp_k, {})
+            if bp and bp.get('partidas'):
+                mot = motivo_pp(bp, 5)
+            else:
+                mot = motivo_cap(bloq.get(1000, {}), 5)
         ws.cell(fila, 9).value = mot
 
     # (cuadro 2 se escribe después de _copy_sheet — ver abajo)
@@ -3084,15 +3175,34 @@ def hoja_comisario(wb_out, datos, tf, tpl):
     # ── Tabla 2 se escribe DESPUÉS del copy para sobreescribir
     #    las fórmulas VLOOKUP del template que referencian archivo externo ──
     cap_com = datos.get("cap_com", {})
+    bloq    = datos.get("bloques", {})
+    n_parts_com = {1000:5, 2000:4, 3000:5, 4000:4, 7000:0}
+
     for cap_k, fila in [(1000,9),(2000,10),(3000,11),(4000,12),(7000,13)]:
         dc    = cap_com.get(cap_k, {})
         ori_p = dc.get("original_p", 0) or 0
         mod_p = dc.get("modificado_p", 0) or 0
         ejrc  = dc.get("ejercido", 0) or 0
-        ws_n.cell(fila, 14).value = ori_p
-        ws_n.cell(fila, 15).value = mod_p
-        ws_n.cell(fila, 16).value = ejrc
-        ws_n.cell(fila, 17).value = _var(mod_p, ejrc)
+
+        FMT_N = '_-* #,##0.00_-;\\-* #,##0.00_-;_-* "-"??_-;_-@_-'
+        for col, val, fmt in [
+            (14, ori_p,              FMT_N),
+            (15, mod_p,              FMT_N),
+            (16, ejrc,               FMT_N),
+            (17, _var(mod_p, ejrc),  '0.0%'),
+        ]:
+            c = ws_n.cell(fila, col)
+            c.value = val
+            c.number_format = fmt
+
+        # Col R: motivos de variación
+        if cap_k == 7000:
+            mot2 = "79902 Provisiones para erogaciones especiales."
+        elif cap_k == 4000:
+            mot2 = "El 100 % de la variación en los recursos se observa en la partida:\n43101 Subsidios a la Producción"
+        else:
+            mot2 = motivo_cap(bloq.get(cap_k, {}), n_parts_com[cap_k])
+        ws_n.cell(fila, 18).value = mot2
 
 # ══════════════════════════════════════════════════════════════════════
 #  FUNCIÓN PRINCIPAL
@@ -3198,7 +3308,7 @@ def _colab_main():
     print("  Descargando archivo generado...")
     _f.download(ruta_out)
     print()
-    print(" ¡Listo! Revisa tu carpeta de descargas.")
+    print("¡Listo! Revisa tu carpeta de descargas.")
 
 
 if __name__ == "__main__":
