@@ -6,7 +6,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 from generar_cuadros_cocodi import (
     detectar_fecha, textos_fecha, leer_csv_map, leer_xlsx_map,
     hoja_pp, hoja_pp_cap, hoja_agricultura, hoja_comisario,
-    MESES_ES, TPL_PP, TPL_PPCAP, TPL_AGR, TPL_COM,
+    MESES_ES, TPL_PP, TPL_PPCAP, TPL_AGR, TPL_COM, DIAS_FIN_MES,
 )
 from generar_austeridad import generar_austeridad, detectar_corte
 import openpyxl
@@ -53,13 +53,30 @@ archivo_map = st.file_uploader("Archivo MAP del día", type=["csv","xlsx"], key=
     help="Nombre sugerido: DD-MES-AAAA_MAP.csv")
 
 if archivo_map:
+    fecha_auto = detectar_fecha(archivo_map.name)
+    st.markdown("**Verifica el periodo de corte** (detectado del nombre del archivo — ajústalo si no es correcto):")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        anio_sel = st.number_input("Año", min_value=2020, max_value=2100,
+                                    value=fecha_auto["anio"], key="anio_cocodi", step=1)
+    with col2:
+        mes_sel = st.selectbox("Mes de corte", options=list(range(1, 13)),
+                                format_func=lambda m: MESES_ES[m].capitalize(),
+                                index=fecha_auto["mes"] - 1, key="mes_cocodi")
+    with col3:
+        dia_sel = st.number_input("Día de corte", min_value=1, max_value=DIAS_FIN_MES[mes_sel],
+                                   value=min(fecha_auto["dia"], DIAS_FIN_MES[mes_sel]),
+                                   key="dia_cocodi", step=1)
+    st.caption(f"📅 Se generará el cuadro con corte al {dia_sel} de {MESES_ES[mes_sel]} de {anio_sel}")
+
     if st.button("Generar cuadros COCODI", key="btn_cocodi"):
         with st.spinner("Procesando…"):
             try:
                 ext = os.path.splitext(archivo_map.name)[1].lower()
                 with tempfile.NamedTemporaryFile(delete=False, suffix=ext, prefix="MAP_") as tmp:
                     tmp.write(archivo_map.getvalue()); ruta_tmp = tmp.name
-                fecha = detectar_fecha(archivo_map.name); tf = textos_fecha(fecha)
+                fecha = {"dia": dia_sel, "mes": mes_sel, "anio": anio_sel}
+                tf = textos_fecha(fecha)
                 datos = leer_csv_map(ruta_tmp, fecha["mes"]) if ext==".csv" else leer_xlsx_map(ruta_tmp)
                 datos["_mes"] = fecha["mes"]
                 tpls = {"Pp":TPL_PP,"PpCAP":TPL_PPCAP,"AGRICULTURA":TPL_AGR,"Comisario":TPL_COM}
