@@ -3133,18 +3133,29 @@ def hoja_comisario(wb_out, datos, tf, tpl):
         mod_p  = d.get("modificado_p", 0) or 0
         ejrc   = d.get("ejercido", 0) or 0
 
-        # Col A: clave del Pp (se escapa de la merged cell del template)
-        try: ws.cell(fila, 1).value = pp_k
+        # Tipo de Pp: primera letra de la clave (M, P, K, S)
+        tipo_letra = pp_k[0]
+
+        # Col A: solo la letra del tipo
+        try: ws.cell(fila, 1).value = tipo_letra
         except: pass
 
-        # Cuando orig_p es 0 y no hay datos reales, dejar en blanco (como #N/A del template)
-        if orig_p == 0 and mod_p == 0 and ejrc == 0:
-            ws.cell(fila, 3).value = None
-            ws.cell(fila, 4).value = None
-            ws.cell(fila, 5).value = None
-            ws.cell(fila, 6).value = None
-            ws.cell(fila, 7).value = None
-            ws.cell(fila, 8).value = _var(mod_p, ejrc)
+        # Col B: "letra espacio clave - denominación" (viene del template, solo agregamos prefijo)
+        try:
+            b_actual = ws.cell(fila, 2).value or ''
+            if b_actual and not str(b_actual).startswith(tipo_letra + ' '):
+                ws.cell(fila, 2).value = f"{tipo_letra} {b_actual}"
+        except: pass
+
+        # Cuando orig_p es 0 Y orig_anual también es 0 → S318 sin presupuesto → dejar blancos
+        sin_datos = (orig_a == 0 and orig_p == 0)
+        if sin_datos:
+            ws.cell(fila, 3).value = None   # C: sin ppto autorizado
+            ws.cell(fila, 4).value = mod_a if mod_a else None   # D: modificado anual si existe
+            ws.cell(fila, 5).value = None   # E: sin original_p
+            ws.cell(fila, 6).value = mod_p if mod_p else None   # F: modificado_p si existe
+            ws.cell(fila, 7).value = None   # G: sin ejercido
+            ws.cell(fila, 8).value = 0.0    # H: 0.0% variación
         else:
             ws.cell(fila, 3).value = orig_a
             ws.cell(fila, 4).value = mod_a
