@@ -2669,18 +2669,47 @@ def leer_xlsx_map(path: str) -> dict:
 
     # ── Bloques por Pp del TD Comisario (para justificaciones cuadro 1) ──
     bloques_pp = {}
+    _pp_key_re = re.compile(r'^[A-Z]\d{3}$')
+
+    def _find_pp_key(ws, row_label, col_label):
+        """Busca la clave del Pp (ej. 'M001') cerca de la celda 'PP', probando
+        varias posiciones posibles del layout de la tabla dinámica en vez de
+        asumir una sola celda fija (evita que el bloque se pierda si el
+        layout real no coincide con lo esperado)."""
+        candidatos = [
+            (row_label, col_label + 1),
+            (row_label + 1, col_label),
+            (row_label + 1, col_label + 1),
+            (row_label, col_label),
+        ]
+        for r, c in candidatos:
+            try:
+                val = ws.cell(r, c).value
+            except Exception:
+                continue
+            if val is None:
+                continue
+            val_str = str(val).strip()
+            if val_str in PP_NOMBRES or val_str == "Total general" or _pp_key_re.match(val_str):
+                return val_str
+        return None
+
     try:
         _wb2 = _opxl.load_workbook(path, data_only=True, read_only=True)
         _ws_com = _wb2['TD Presupuesto Comisario']
-        # R27 tiene 'PP' en la col de inicio de cada bloque; R27+1 tiene el nombre del Pp
+        # R27 tiene 'PP' en la col de inicio de cada bloque; la clave del Pp
+        # puede estar en distintas posiciones según el layout exportado —
+        # _find_pp_key prueba varias y valida contra PP_NOMBRES.
         # Cada bloque ocupa 13 cols: A(PP), B(nombre), D(partida), E(monto), F(%), G(nombre_partida)
         # R28 F = % total de variación del bloque
         row27 = list(_ws_com[27])
         for c in row27:
             if c.value == 'PP':
                 sc   = c.column          # col inicio del bloque
-                pp   = _ws_com.cell(27, sc + 1).value
-                if not pp: continue
+                pp   = _find_pp_key(_ws_com, 27, sc)
+                if not pp:
+                    print(f"  ⚠️  bloques_pp: no se pudo identificar la clave del Pp en el bloque de columna {sc}")
+                    continue
                 pct_total = _ws_com.cell(28, sc + 5).value or 0.0
                 parts = []
                 total_all = 0.0
