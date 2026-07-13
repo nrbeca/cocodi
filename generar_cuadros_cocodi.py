@@ -2696,12 +2696,22 @@ def leer_xlsx_map(path: str) -> dict:
                         parts.append({'clave': partida,
                                       'nombre': str(nombre or '').strip(),
                                       'monto': m})
+                # Ordenar por monto descendente para resultado determinístico
+                parts.sort(key=lambda x: x['monto'], reverse=True)
                 # Recalcular % de cada partida sobre el total real
                 for p in parts:
                     p['pct'] = p['monto'] / total_all if total_all else 0
-                bloques_pp[pp] = {'pct_total': float(pct_total),
+                # El texto de justificación ya formado está en col sc+7 de R36
+                texto_just = None
+                for r_just in [36, 47, 28]:
+                    val = _ws_com.cell(r_just, sc + 7).value
+                    if val and isinstance(val, str) and ',' in val and len(val) > 20:
+                        texto_just = val.strip()
+                        break
+                bloques_pp[pp] = {'pct_total': float(pct_total) if pct_total else 0.0,
                                   'partidas': parts,
-                                  'total_all': total_all}
+                                  'total_all': total_all,
+                                  'texto_just': texto_just}
         _wb2.close()
     except Exception as _e2:
         print(f"  ⚠️  bloques_pp: {_e2}")
@@ -2751,20 +2761,23 @@ def motivo_cap(bloque: dict, n: int = 5) -> str:
 def motivo_pp(bloque_pp: dict, n: int = 5) -> str:
     """Genera el texto de justificación para un Pp del Comisario."""
     if not bloque_pp: return ""
+    pct_total  = bloque_pp.get('pct_total') or 0
+    texto_just = bloque_pp.get('texto_just', '')
+
+    # Usar el texto pre-calculado del TD si existe (es el más preciso)
+    if texto_just and pct_total:
+        # Limpiar comas finales sueltas
+        texto_limpio = texto_just.rstrip(', ')
+        return (f"El {pct_total*100:.1f} % de la variación se observa en las partidas:\n"
+                f"{texto_limpio}.")
+
+    # Fallback: construir desde partidas con nombre ordenadas por monto
     parts_con_nombre = [p for p in bloque_pp.get('partidas', [])
                         if str(p.get('nombre', '')).strip()]
     parts = parts_con_nombre[:n]
     if not parts: return ""
+    pct_show = pct_total if pct_total else sum(p.get('pct', 0) for p in parts)
     noms = [f"{p['clave']} {str(p['nombre']).strip()}" for p in parts]
-
-    # Usar pct_total del bloque (R28) cuando existe — es el % pre-calculado en el TD
-    pct_total = bloque_pp.get('pct_total') or 0
-    if pct_total:
-        pct_show = pct_total
-    else:
-        # Recalcular: suma de % de las partidas con nombre sobre el total_all
-        pct_show = sum(p.get('pct', 0) for p in parts)
-
     return f"El {pct_show*100:.1f} % de la variación se observa en las partidas:\n{', '.join(noms)}."
 
 def motivo_cap4000(datos: dict, tf: dict) -> str:
@@ -3144,11 +3157,7 @@ def hoja_comisario(wb_out, datos, tf, tpl):
         if pp_k == "K017":
             mot = "La variación se encuentra en la partida 79902 Provisiones para erogaciones especiales."
         elif pp_k in ["S304","S318"]:
-            bp = bloques_pp.get(pp_k, {})
-            if bp and bp.get('pct_total'):
-                mot = motivo_pp(bp, 5)
-            else:
-                mot = "La variación se encuentra en la partida 43101 Subsidios a la producción."
+            mot = "La variación se encuentra en la partida 43101 Subsidios a la producción."
         elif pp_k in ["S292","S293"]:
             bp = bloques_pp.get(pp_k, {})
             # S293 no tiene pct_total, tomar top-3 (da 90.9%)
