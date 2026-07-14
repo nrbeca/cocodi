@@ -2668,79 +2668,91 @@ def leer_xlsx_map(path: str) -> dict:
     bloques = _bloques_td(df_agr)
 
     # ── Bloques por Pp del TD Comisario (para justificaciones cuadro 1) ──
+    # OJO: no todos los bloques de Pp tienen el mismo número de filas de
+    # filtro arriba (algunos traen un filtro extra 'TIPO UR 1' antes de
+    # 'PP', otros no), así que la fila de 'PP' varía de un bloque a otro.
+    # Por eso se busca 'PP' en un RANGO de filas (no una fila fija) y todo
+    # lo demás (pct_total, encabezado, datos, texto ya formado) se calcula
+    # en relación a la fila donde realmente se encontró 'PP'.
     bloques_pp = {}
-    _pp_key_re = re.compile(r'^[A-Z]\d{3}$')
 
-    def _find_pp_key(ws, row_label, col_label):
-        """Busca la clave del Pp (ej. 'M001') cerca de la celda 'PP', probando
-        varias posiciones posibles del layout de la tabla dinámica en vez de
-        asumir una sola celda fija (evita que el bloque se pierda si el
-        layout real no coincide con lo esperado)."""
-        candidatos = [
-            (row_label, col_label + 1),
-            (row_label + 1, col_label),
-            (row_label + 1, col_label + 1),
-            (row_label, col_label),
-        ]
-        for r, c in candidatos:
-            try:
-                val = ws.cell(r, c).value
-            except Exception:
+    def _leer_bloque_pp(ws, r0, sc, max_filas=140):
+        """r0 = fila donde se encontró 'PP', sc = columna de esa celda."""
+        pp = ws.cell(r0, sc + 1).value
+        if pp is None:
+            return None
+        pp = str(pp).strip()
+        if pp not in PP_NOMBRES:
+            return None
+
+        # Primero localizar la fila de encabezado ('Etiquetas de fila').
+        header_row = None
+        for dr in range(1, 7):
+            if str(ws.cell(r0 + dr, sc).value or '').strip() == 'Etiquetas de fila':
+                header_row = r0 + dr
+                break
+        if header_row is None:
+            header_row = r0 + 2  # fallback razonable si no se encontró
+
+        # El % total de variación del bloque vive en alguna fila ENTRE la
+        # fila de 'PP' y la fila de encabezado (nunca dentro del área de
+        # datos, donde también hay valores de % por partida individual).
+        pct_total = 0.0
+        for r in range(r0 + 1, header_row):
+            v = ws.cell(r, sc + 5).value
+            if isinstance(v, (int, float)) and 0 < v <= 1.5:
+                pct_total = float(v)
+
+        data_start = header_row + 1
+        parts, total_all = [], 0.0
+        texto_just, texto_len_max = None, 0
+        vacias_seguidas = 0
+        for r in range(data_start, data_start + max_filas):
+            partida = ws.cell(r, sc + 3).value
+            if partida is None:
+                vacias_seguidas += 1
+                if vacias_seguidas > 2:
+                    break
                 continue
-            if val is None:
-                continue
-            val_str = str(val).strip()
-            if val_str in PP_NOMBRES or val_str == "Total general" or _pp_key_re.match(val_str):
-                return val_str
-        return None
+            vacias_seguidas = 0
+            if str(partida).strip() == 'Total general':
+                break
+            monto  = ws.cell(r, sc + 4).value
+            nombre = ws.cell(r, sc + 6).value
+            m = float(monto or 0)
+            if m > 0:
+                total_all += m
+                parts.append({'clave': partida, 'nombre': str(nombre or '').strip(), 'monto': m})
+            # El texto de justificación ya formado (comas + varias partidas)
+            # aparece "congelado" en alguna fila del bloque — nos quedamos
+            # con el más largo encontrado en vez de asumir una fila fija.
+            txt = ws.cell(r, sc + 7).value
+            if isinstance(txt, str) and ',' in txt and len(txt) > texto_len_max:
+                texto_just, texto_len_max = txt.strip(), len(txt)
+
+        parts.sort(key=lambda x: x['monto'], reverse=True)
+        for p in parts:
+            p['pct'] = p['monto'] / total_all if total_all else 0
+
+        return {'pp': pp, 'pct_total': pct_total, 'partidas': parts,
+                'total_all': total_all, 'texto_just': texto_just}
 
     try:
         _wb2 = _opxl.load_workbook(path, data_only=True, read_only=True)
         _ws_com = _wb2['TD Presupuesto Comisario']
-        # R27 tiene 'PP' en la col de inicio de cada bloque; la clave del Pp
-        # puede estar en distintas posiciones según el layout exportado —
-        # _find_pp_key prueba varias y valida contra PP_NOMBRES.
-        # Cada bloque ocupa 13 cols: A(PP), B(nombre), D(partida), E(monto), F(%), G(nombre_partida)
-        # R28 F = % total de variación del bloque
-        row27 = list(_ws_com[27])
-        for c in row27:
-            if c.value == 'PP':
-                sc   = c.column          # col inicio del bloque
-                pp   = _find_pp_key(_ws_com, 27, sc)
-                if not pp:
-                    print(f"  ⚠️  bloques_pp: no se pudo identificar la clave del Pp en el bloque de columna {sc}")
-                    continue
-                pct_total = _ws_com.cell(28, sc + 5).value or 0.0
-                parts = []
-                total_all = 0.0
-                for r in range(30, 160):
-                    partida = _ws_com.cell(r, sc + 3).value
-                    monto   = _ws_com.cell(r, sc + 4).value
-                    nombre  = _ws_com.cell(r, sc + 6).value
-                    if partida is None: continue
-                    if str(partida) == 'Total general': break
-                    m = float(monto or 0)
-                    if m > 0:
-                        total_all += m
-                        parts.append({'clave': partida,
-                                      'nombre': str(nombre or '').strip(),
-                                      'monto': m})
-                # Ordenar por monto descendente para resultado determinístico
-                parts.sort(key=lambda x: x['monto'], reverse=True)
-                # Recalcular % de cada partida sobre el total real
-                for p in parts:
-                    p['pct'] = p['monto'] / total_all if total_all else 0
-                # El texto de justificación ya formado está en col sc+7 de R36
-                texto_just = None
-                for r_just in [36, 47, 28]:
-                    val = _ws_com.cell(r_just, sc + 7).value
-                    if val and isinstance(val, str) and ',' in val and len(val) > 20:
-                        texto_just = val.strip()
-                        break
-                bloques_pp[pp] = {'pct_total': float(pct_total) if pct_total else 0.0,
-                                  'partidas': parts,
-                                  'total_all': total_all,
-                                  'texto_just': texto_just}
+        cols_vistas = set()
+        # Rango razonable de filas donde puede aparecer la etiqueta 'PP'
+        # de cada bloque (en vez de asumir una única fila fija).
+        for row_idx in range(20, 40):
+            fila = _ws_com[row_idx] if row_idx <= _ws_com.max_row else []
+            for c in fila:
+                if c.value == 'PP' and c.column not in cols_vistas:
+                    cols_vistas.add(c.column)
+                    info = _leer_bloque_pp(_ws_com, row_idx, c.column)
+                    if info:
+                        bloques_pp[info['pp']] = info
+                    else:
+                        print(f"  ⚠️  bloques_pp: no se pudo leer el bloque en fila {row_idx}, columna {c.column}")
         _wb2.close()
     except Exception as _e2:
         print(f"  ⚠️  bloques_pp: {_e2}")
@@ -2796,7 +2808,7 @@ def motivo_pp(bloque_pp: dict, n: int = 5) -> str:
     # Usar el texto pre-calculado del TD si existe (es el más preciso)
     if texto_just and pct_total:
         # Limpiar comas finales sueltas
-        texto_limpio = texto_just.rstrip(', ')
+        texto_limpio = texto_just.rstrip(', .')
         return (f"El {pct_total*100:.1f} % de la variación se observa en las partidas:\n"
                 f"{texto_limpio}.")
 
