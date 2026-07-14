@@ -2434,7 +2434,7 @@ NOMBRES_PARTIDAS = {
     21101:"Materiales y útiles de oficina",
     21401:"Materiales y útiles consumibles para el procesamiento en equipos y bienes informáticos",
     22104:"Productos alimenticios para el personal en las instalaciones de las dependencias y entidades",
-    26102:"Combustibles, lubricantes y aditivos para vehículos terrestres, aéreos, marítimos, lacustres y fluviales destinados a servicios públicos",
+    26102:"Combustibles, lubricantes y aditivos para vehículos terrestres, aéreos, marítimos, lacustres y fluviales destinados a servicios públicos y la operación de programas públicos",
     26103:"Combustibles, lubricantes y aditivos para vehículos terrestres, aéreos, marítimos, lacustres y fluviales destinados a servicios administrativos",
     31101:"Servicio de energía eléctrica",
     31701:"Servicios de conducción de señales analógicas y digitales",
@@ -2868,7 +2868,7 @@ def motivo_pp(bloque_pp: dict, n: int = 5) -> str:
                         if str(p.get('nombre', '')).strip()]
     parts = parts_con_nombre[:n]
     if not parts: return ""
-    pct_show = pct_total if pct_total else sum(p.get('pct', 0) for p in parts)
+    pct_show = sum(p.get('pct', 0) for p in parts)
     noms = [f"{p['clave']} {str(p['nombre']).strip()}" for p in parts]
     return f"El {pct_show*100:.1f} % de la variación se observa en las partidas:\n{', '.join(noms)}."
 
@@ -3261,12 +3261,20 @@ def hoja_comisario(wb_out, datos, tf, tpl):
             mot = "La variación se encuentra en la partida 79902 Provisiones para erogaciones especiales."
         elif pp_k in ["S304","S318"]:
             mot = "La variación se encuentra en la partida 43101 Subsidios a la producción."
-        elif pp_k in ["S292","S293"]:
+        elif pp_k == "S293":
             bp = bloques_pp.get(pp_k, {})
-            # S293 no tiene pct_total, tomar top-3 (da 90.9%)
-            n_pp = 3 if not bp.get('pct_total') else 5
+            # Confirmado con la TD Comisario actualizada: S293 solo reporta
+            # el top-3 de partidas (34101, 43101, 33903 = 90.9%).
             if bp and bp.get('partidas'):
-                mot = motivo_pp(bp, n_pp)
+                mot = motivo_pp(bp, 3)
+            else:
+                mot = "La variación se encuentra en la partida 43101 Subsidios a la producción."
+        elif pp_k == "S292":
+            bp = bloques_pp.get(pp_k, {})
+            # Confirmado con la TD Comisario actualizada: S292 reporta el
+            # top-4 de partidas (12101, 26102, 39801, 12201 = 84.9%).
+            if bp and bp.get('partidas'):
+                mot = motivo_pp(bp, 4)
             else:
                 mot = "La variación se encuentra en la partida 43101 Subsidios a la producción."
         else:
