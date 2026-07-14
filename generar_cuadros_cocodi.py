@@ -21,7 +21,7 @@ def _ensure(pkg):
     try:
         importlib.import_module(pkg)
     except ImportError:
-        print(f"   Instalando {pkg}...")
+        print(f"  📦 Instalando {pkg}...")
         subprocess.check_call([_sys.executable, "-m", "pip", "install", pkg, "-q"])
 
 _ensure("openpyxl")
@@ -2381,6 +2381,25 @@ PP_NOMBRES = {
     "S318": "S318 - Comercio Justo",
 }
 
+# Catálogo oficial de Unidades Responsables "Sector Central" (TIPO UR 1 =
+# "Oficinas Centrales"), tomado de Catalogo_de_equivalencias_2025-2026.xlsx.
+# Se usa en vez de un regex genérico de 3 dígitos para no incluir por error
+# unidades de Órganos Desconcentrados / Entidades Paraestatales que también
+# tengan clave numérica de 3 dígitos.
+UR_SECTOR_CENTRAL = frozenset([
+    "100", "106", "107", "110", "111", "112", "117", "119", "120",
+    "200", "220", "221", "222", "225", "226", "227", "228", "230", "231",
+    "232", "233", "235", "236", "237", "240", "241", "242", "245", "246",
+    "247", "250", "251", "252", "253", "260", "261", "262", "263", "264",
+    "265", "266", "267", "268", "269", "270", "271", "272", "273", "274",
+    "275", "276", "277", "278", "279", "280", "281", "282", "283", "284",
+    "285", "286", "287", "288", "289", "290", "291", "292",
+    "500", "510", "511", "512", "513",
+    "800", "810", "811", "812",
+    "900", "910", "911", "912", "920", "921", "922", "923", "924",
+    "G00",
+])
+
 CAPITULOS = {
     1000: "Servicios Personales",
     2000: "Materiales y Suministros",
@@ -2419,11 +2438,19 @@ NOMBRES_PARTIDAS = {
     26103:"Combustibles, lubricantes y aditivos para vehículos terrestres, aéreos, marítimos, lacustres y fluviales destinados a servicios administrativos",
     31101:"Servicio de energía eléctrica",
     31701:"Servicios de conducción de señales analógicas y digitales",
+    32201:"Arrendamiento de edificios y locales",
     32301:"Arrendamiento de equipo y bienes informáticos",
+    32503:"Arrendamiento de vehículos terrestres, aéreos, marítimos, lacustres y fluviales para servicios administrativos",
     33301:"Servicios de desarrollo de aplicaciones informáticas",
     33801:"Servicios de vigilancia",
+    33901:"Subcontratación de servicios con terceros",
+    33903:"Servicios integrales",
+    34101:"Servicios bancarios y financieros",
     34501:"Seguros de bienes patrimoniales",
+    35101:"Mantenimiento y conservación de inmuebles para la prestación de servicios administrativos",
+    35701:"Mantenimiento y conservación de maquinaria y equipo",
     35801:"Servicios de lavandería, limpieza e higiene",
+    31902:"Contratación de otros servicios",
     39801:"Impuesto sobre nóminas",
     43101:"Subsidios a la producción",
     79902:"Provisiones para erogaciones especiales",
@@ -2473,7 +2500,7 @@ def textos_fecha(f: dict) -> dict:
 # ══════════════════════════════════════════════════════════════════════
 
 def leer_csv_map(path: str, mes_corte: int) -> dict:
-    print(f"   Procesando CSV (corte mes {mes_corte})...")
+    print(f"  📊 Procesando CSV (corte mes {mes_corte})...")
     try:
         df = pd.read_csv(path, encoding='utf-8')
     except UnicodeDecodeError:
@@ -2483,7 +2510,7 @@ def leer_csv_map(path: str, mes_corte: int) -> dict:
     df['CAP'] = df['PARTIDA'].apply(lambda p: CAP_MAP.get(int(p)//1000, 0)
                                     if str(p).isdigit() or (isinstance(p,(int,float)) and not pd.isna(p)) else 0)
 
-    df_sc = df[df['UNIDAD'].astype(str).str.match(r'^\d{3}$', na=False)].copy()
+    df_sc = df[df['UNIDAD'].astype(str).isin(UR_SECTOR_CENTRAL)].copy()
     df_sc = df_sc[df_sc['PP'].isin(PP_NOMBRES.keys())]
 
     mp = MESES_COLS[:mes_corte]
@@ -2578,11 +2605,11 @@ def _sf(v):
     except: return 0.0
 
 def leer_xlsx_map(path: str) -> dict:
-    print("   Procesando xlsx con hojas TD...")
+    print("  📊 Procesando xlsx con hojas TD...")
     import openpyxl as _opxl
     xl = pd.ExcelFile(path)
     hojas = xl.sheet_names
-    print(f"   Hojas: {hojas}")
+    print(f"  📋 Hojas: {hojas}")
     # Abrir con openpyxl una sola vez para lectura de columnas con nombre
     _wb = _opxl.load_workbook(path, data_only=True, read_only=True)
 
@@ -2685,7 +2712,7 @@ def leer_xlsx_map(path: str) -> dict:
                     disponible  = _sf(row[100].value),  # CW
                 )
     except Exception as _e:
-        print(f"    cap_com: {_e}")
+        print(f"  ⚠️  cap_com: {_e}")
     finally:
         _wb.close()
 
@@ -3299,7 +3326,7 @@ def generar_cuadros(ruta_entrada: str, ruta_salida: str = None,
     Lee la base MAP del día (CSV o xlsx) y genera los 4 cuadros.
     Los templates están embebidos — no se necesitan archivos externos.
     """
-    print(f" Leyendo: {ruta_entrada}")
+    print(f"📂 Leyendo: {ruta_entrada}")
 
     # Fecha
     if mes_corte and anio_corte:
@@ -3307,7 +3334,7 @@ def generar_cuadros(ruta_entrada: str, ruta_salida: str = None,
     else:
         fecha = detectar_fecha(ruta_entrada)
     tf = textos_fecha(fecha)
-    print(f" Fecha de corte: {tf['dia_mes_anio']}")
+    print(f"📅 Fecha de corte: {tf['dia_mes_anio']}")
 
     # Leer datos
     ext = os.path.splitext(ruta_entrada)[1].lower()
@@ -3316,7 +3343,7 @@ def generar_cuadros(ruta_entrada: str, ruta_salida: str = None,
     else:
         datos = leer_xlsx_map(ruta_entrada)
     datos['_mes'] = fecha["mes"]
-    print(f" {len(datos['pp'])-1} Pp, {len(datos['cap'])} capítulos")
+    print(f"✅ {len(datos['pp'])-1} Pp, {len(datos['cap'])} capítulos")
 
     # Templates embebidos — no se necesitan archivos externos
     tpls = {
@@ -3329,16 +3356,16 @@ def generar_cuadros(ruta_entrada: str, ruta_salida: str = None,
     wb_out = openpyxl.Workbook()
     if "Sheet" in wb_out.sheetnames: del wb_out["Sheet"]
 
-    print(" Generando Pp...")
+    print("📊 Generando Pp...")
     hoja_pp(wb_out, datos, tf, tpls['Pp'])
 
-    print("Generando Pp y CAP...")
+    print("📊 Generando Pp y CAP...")
     hoja_pp_cap(wb_out, datos, tf, tpls['PpCAP'])
 
-    print(" Generando AGRICULTURA...")
+    print("📊 Generando AGRICULTURA...")
     hoja_agricultura(wb_out, datos, tf, tpls['AGRICULTURA'])
 
-    print(" Generando Presupuesto Comisario...")
+    print("📊 Generando Presupuesto Comisario...")
     hoja_comisario(wb_out, datos, tf, tpls['Comisario'])
 
     # Salida
@@ -3349,7 +3376,7 @@ def generar_cuadros(ruta_entrada: str, ruta_salida: str = None,
         ruta_salida = os.path.join(carpeta, nombre_out)
 
     wb_out.save(ruta_salida)
-    print(f"\n Archivo generado: {ruta_salida}")
+    print(f"\n✅ Archivo generado: {ruta_salida}")
     return ruta_salida
 
 
@@ -3367,7 +3394,7 @@ def _colab_main():
         if args:
             generar_cuadros(args[0])
         else:
-            ruta = input(" Ruta del archivo MAP (.csv o .xlsx): ").strip()
+            ruta = input("📂 Ruta del archivo MAP (.csv o .xlsx): ").strip()
             if ruta:
                 generar_cuadros(ruta)
         return
@@ -3376,7 +3403,7 @@ def _colab_main():
     print("  GENERADOR DE CUADROS COCODI — SADER MAP 2026")
     print("═" * 55)
     print()
-    print(" Selecciona el archivo MAP del día (.csv o .xlsx):")
+    print("📂 Selecciona el archivo MAP del día (.csv o .xlsx):")
     sub = _f.upload()
     if not sub:
         print("⚠️  No se subió ningún archivo.")
@@ -3390,10 +3417,10 @@ def _colab_main():
     print()
     ruta_out = generar_cuadros(ruta)
     print()
-    print("  Descargando archivo generado...")
+    print("⬇️  Descargando archivo generado...")
     _f.download(ruta_out)
     print()
-    print(" ¡Listo! Revisa tu carpeta de descargas.")
+    print("✅ ¡Listo! Revisa tu carpeta de descargas.")
 
 
 if __name__ == "__main__":
