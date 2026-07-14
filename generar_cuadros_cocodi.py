@@ -2520,8 +2520,32 @@ def leer_csv_map(path: str, mes_corte: int) -> dict:
               for (pp, c), r in pc_grp.iterrows() if c in CAPITULOS}
 
     bloques = _bloques_csv(df_sc)
+    bloques_pp = _bloques_pp_csv(df_sc)
     return dict(pp=pp_rows, cap=cap_dict, pp_cap=pp_cap,
-                cap_com=cap_dict, bloques=bloques)
+                cap_com=cap_dict, bloques=bloques, bloques_pp=bloques_pp)
+
+
+def _bloques_pp_csv(df_sc: pd.DataFrame, n_top: int = 5) -> dict:
+    """Igual que _bloques_csv pero agrupando por Pp en vez de por capítulo.
+    Sin esto, la ruta CSV nunca llena 'bloques_pp' y todos los Pp caen al
+    texto genérico de capítulo en hoja_comisario (ver motivo_pp)."""
+    bloques_pp = {}
+    for pp, dpp in df_sc.groupby('PP'):
+        pg = dpp.groupby('PARTIDA')['DISP_P'].sum().reset_index()
+        pg = pg[pg['DISP_P'] > 0].sort_values('DISP_P', ascending=False)
+        total_all = pg['DISP_P'].sum()
+        if total_all <= 0:
+            bloques_pp[pp] = {'pct_total': 0.0, 'partidas': [], 'total_all': 0.0, 'texto_just': None}
+            continue
+        partidas = [dict(clave=int(r['PARTIDA']),
+                          nombre=NOMBRES_PARTIDAS.get(int(r['PARTIDA']), f"Partida {int(r['PARTIDA'])}"),
+                          monto=float(r['DISP_P']),
+                          pct=float(r['DISP_P']) / total_all)
+                    for _, r in pg.iterrows()]
+        pct_total = sum(p['pct'] for p in partidas[:n_top])
+        bloques_pp[pp] = {'pct_total': pct_total, 'partidas': partidas,
+                          'total_all': float(total_all), 'texto_just': None}
+    return bloques_pp
 
 
 def _bloques_csv(df_sc: pd.DataFrame) -> dict:
