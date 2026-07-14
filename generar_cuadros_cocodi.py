@@ -2446,6 +2446,7 @@ NOMBRES_PARTIDAS = {
     33901:"Subcontratación de servicios con terceros",
     33903:"Servicios integrales",
     34101:"Servicios bancarios y financieros",
+    37104:"Pasajes aéreos nacionales para servidores públicos de mando en el desempeño de comisiones y funciones oficiales",
     34501:"Seguros de bienes patrimoniales",
     35101:"Mantenimiento y conservación de inmuebles para la prestación de servicios administrativos",
     35701:"Mantenimiento y conservación de maquinaria y equipo",
@@ -3259,7 +3260,15 @@ def hoja_comisario(wb_out, datos, tf, tpl):
         # Col I: justificación con % correcto del TD Comisario por Pp
         if pp_k == "K017":
             mot = "La variación se encuentra en la partida 79902 Provisiones para erogaciones especiales."
-        elif pp_k in ["S304","S318"]:
+        elif pp_k == "S304":
+            bp = bloques_pp.get(pp_k, {})
+            # Confirmado con la TD Comisario actualizada: S304 reporta el
+            # top-3 de partidas (43101, 33903, 37104 = 99.6%).
+            if bp and bp.get('partidas'):
+                mot = motivo_pp(bp, 3)
+            else:
+                mot = "La variación se encuentra en la partida 43101 Subsidios a la producción."
+        elif pp_k == "S318":
             mot = "La variación se encuentra en la partida 43101 Subsidios a la producción."
         elif pp_k == "S293":
             bp = bloques_pp.get(pp_k, {})
