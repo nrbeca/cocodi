@@ -2436,6 +2436,7 @@ NOMBRES_PARTIDAS = {
     22104:"Productos alimenticios para el personal en las instalaciones de las dependencias y entidades",
     26102:"Combustibles, lubricantes y aditivos para vehículos terrestres, aéreos, marítimos, lacustres y fluviales destinados a servicios públicos y la operación de programas públicos",
     26103:"Combustibles, lubricantes y aditivos para vehículos terrestres, aéreos, marítimos, lacustres y fluviales destinados a servicios administrativos",
+    29601:"Refacciones y accesorios menores de equipo de transporte",
     31101:"Servicio de energía eléctrica",
     31701:"Servicios de conducción de señales analógicas y digitales",
     32201:"Arrendamiento de edificios y locales",
@@ -3305,7 +3306,7 @@ def hoja_comisario(wb_out, datos, tf, tpl):
     #    las fórmulas VLOOKUP del template que referencian archivo externo ──
     cap_com = datos.get("cap_com", {})
     bloq    = datos.get("bloques", {})
-    n_parts_com = {1000:5, 2000:4, 3000:5, 4000:4, 7000:0}
+    n_parts_com = {1000:4, 2000:4, 3000:5, 4000:4, 7000:0}
 
     for cap_k, fila in [(1000,9),(2000,10),(3000,11),(4000,12),(7000,13)]:
         dc    = cap_com.get(cap_k, {})
