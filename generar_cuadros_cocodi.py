@@ -3113,6 +3113,7 @@ def hoja_pp_cap(wb_out, datos, tf, tpl):
         for col in range(1, 10):
             src = ws.cell(src_row, col)
             dst = ws.cell(dst_row, col)
+            dst.value = src.value
             if src.has_style:
                 dst.font          = copy(src.font)
                 dst.border        = copy(src.border)
