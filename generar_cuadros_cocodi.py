@@ -2375,6 +2375,7 @@ PP_NOMBRES = {
     "K017": "K017 - Infraestructura para el desarrollo rural sustentable",
     "M001": "M001 - Actividades de apoyo administrativo",
     "P021": "P021 - Aplicación de la Política Agropecuaria",
+    "S263": "S263 - Sanidad e Inocuidad Agroalimentaria",
     "S292": "S292 - Fertilizantes para el Bienestar",
     "S293": "S293 - Producción para el Bienestar",
     "S304": "S304 - Pesca y Acuacultura Sustentables",
@@ -2502,7 +2503,7 @@ def textos_fecha(f: dict) -> dict:
 # ══════════════════════════════════════════════════════════════════════
 
 def leer_csv_map(path: str, mes_corte: int) -> dict:
-    print(f"   Procesando CSV (corte mes {mes_corte})...")
+    print(f"  📊 Procesando CSV (corte mes {mes_corte})...")
     try:
         df = pd.read_csv(path, encoding='utf-8')
     except UnicodeDecodeError:
@@ -2607,11 +2608,11 @@ def _sf(v):
     except: return 0.0
 
 def leer_xlsx_map(path: str) -> dict:
-    print("   Procesando xlsx con hojas TD...")
+    print("  📊 Procesando xlsx con hojas TD...")
     import openpyxl as _opxl
     xl = pd.ExcelFile(path)
     hojas = xl.sheet_names
-    print(f"   Hojas: {hojas}")
+    print(f"  📋 Hojas: {hojas}")
     # Abrir con openpyxl una sola vez para lectura de columnas con nombre
     _wb = _opxl.load_workbook(path, data_only=True, read_only=True)
 
@@ -3202,19 +3203,19 @@ def hoja_comisario(wb_out, datos, tf, tpl):
     ws['B4'] = (f"REPORTE DEL EJERCICIO PRESUPUESTAL {tf['anio']}\n"
                 f"(PERIODO 1 DE ENERO AL {tf['DIA_MES_ANIO']})")
     ws['E7'] = (f"\nPresupuesto\n1 enero al {tf['dia_mes_anio']}\n(millones de pesos)")
-    ws['E8'] = f"Presupuesto Autorizado\n1 al {tf['dia_mes_anio']}"
-    ws['F8'] = f"Presupuesto Programado\n1 al {tf['dia_mes_anio']}\n"
-    ws['G8'] = f"Presupuesto\n Ejercido\n1 al {tf['dia_mes_anio']}\n"
-    ws['H7'] = f"Variación (%) entre lo programado y ejercido\n1 al {tf['dia_mes_anio']}"
+    ws['E8'] = f"Presupuesto Autorizado\n1 de enero al {tf['dia_mes_anio']}"
+    ws['F8'] = f"Presupuesto Programado\n1 de enero al {tf['dia_mes_anio']}\n"
+    ws['G8'] = f"Presupuesto\n Ejercido\n1 de enero al {tf['dia_mes_anio']}\n"
+    ws['H7'] = f"Variación (%) entre lo programado y ejercido\n1 de enero al {tf['dia_mes_anio']}"
     ws['B17'] = f"Fuente: {tf['fuente_map']}"
 
     # ── Encabezados segunda tabla (capítulos, cols L-R) ───────────────
-    ws['N7'] = (f"Presupuesto\n1 al {tf['dia_mes_anio']}\n(millones de pesos)")
-    ws['N8'] = f"Presupuesto Autorizado\n1 al {tf['dia_mes_anio']}"
-    ws['O8'] = f"Presupuesto Programado\n1 al {tf['dia_mes_anio']}"
-    ws['P8'] = f"Presupuesto\n Ejercido\n1 al {tf['dia_mes_anio']}"
+    ws['N7'] = (f"Presupuesto\n1 de enero al {tf['dia_mes_anio']}\n(millones de pesos)")
+    ws['N8'] = f"Presupuesto Autorizado\n1 de enero al {tf['dia_mes_anio']}"
+    ws['O8'] = f"Presupuesto Programado\n1 de enero al {tf['dia_mes_anio']}"
+    ws['P8'] = f"Presupuesto\n Ejercido\n1 de enero al {tf['dia_mes_anio']}"
     ws['Q7'] = (f"Variación (%) entre lo programado y ejercido\n"
-                f"1 al {tf['dia_mes_anio']}")
+                f"1 de enero al {tf['dia_mes_anio']}")
 
     # ── Tabla 1: datos por Pp (cols A-I, filas 9-15) ─────────────────
     bloques_pp = datos.get("bloques_pp", {})
@@ -3361,7 +3362,7 @@ def generar_cuadros(ruta_entrada: str, ruta_salida: str = None,
     else:
         datos = leer_xlsx_map(ruta_entrada)
     datos['_mes'] = fecha["mes"]
-    print(f" {len(datos['pp'])-1} Pp, {len(datos['cap'])} capítulos")
+    print(f"✅ {len(datos['pp'])-1} Pp, {len(datos['cap'])} capítulos")
 
     # Templates embebidos — no se necesitan archivos externos
     tpls = {
@@ -3374,16 +3375,16 @@ def generar_cuadros(ruta_entrada: str, ruta_salida: str = None,
     wb_out = openpyxl.Workbook()
     if "Sheet" in wb_out.sheetnames: del wb_out["Sheet"]
 
-    print(" Generando Pp...")
+    print("📊 Generando Pp...")
     hoja_pp(wb_out, datos, tf, tpls['Pp'])
 
-    print(" Generando Pp y CAP...")
+    print("📊 Generando Pp y CAP...")
     hoja_pp_cap(wb_out, datos, tf, tpls['PpCAP'])
 
-    print(" Generando AGRICULTURA...")
+    print("📊 Generando AGRICULTURA...")
     hoja_agricultura(wb_out, datos, tf, tpls['AGRICULTURA'])
 
-    print(" Generando Presupuesto Comisario...")
+    print("📊 Generando Presupuesto Comisario...")
     hoja_comisario(wb_out, datos, tf, tpls['Comisario'])
 
     # Salida
@@ -3394,7 +3395,7 @@ def generar_cuadros(ruta_entrada: str, ruta_salida: str = None,
         ruta_salida = os.path.join(carpeta, nombre_out)
 
     wb_out.save(ruta_salida)
-    print(f"\n Archivo generado: {ruta_salida}")
+    print(f"\n✅ Archivo generado: {ruta_salida}")
     return ruta_salida
 
 
@@ -3424,7 +3425,7 @@ def _colab_main():
     print(" Selecciona el archivo MAP del día (.csv o .xlsx):")
     sub = _f.upload()
     if not sub:
-        print("⚠️  No se subió ningún archivo.")
+        print("  No se subió ningún archivo.")
         return
 
     nombre, contenido = next(iter(sub.items()))
@@ -3435,7 +3436,7 @@ def _colab_main():
     print()
     ruta_out = generar_cuadros(ruta)
     print()
-    print("  Descargando archivo generado...")
+    print("⬇️  Descargando archivo generado...")
     _f.download(ruta_out)
     print()
     print(" ¡Listo! Revisa tu carpeta de descargas.")
