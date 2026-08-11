@@ -2448,6 +2448,7 @@ NOMBRES_PARTIDAS = {
     33901:"Subcontratación de servicios con terceros",
     33903:"Servicios integrales",
     34101:"Servicios bancarios y financieros",
+    33501:"Estudios e investigaciones",
     37104:"Pasajes aéreos nacionales para servidores públicos de mando en el desempeño de comisiones y funciones oficiales",
     34501:"Seguros de bienes patrimoniales",
     35101:"Mantenimiento y conservación de inmuebles para la prestación de servicios administrativos",
@@ -3200,6 +3201,24 @@ def hoja_comisario(wb_out, datos, tf, tpl):
     cap  = datos["cap"]
     bloq = datos["bloques"]
 
+    # ── Insertar fila para S263 (no estaba en la plantilla original) ──
+    # Se copia el formato (fuente, bordes, relleno, alto de fila) de la
+    # fila S318 (15) hacia la nueva fila 16, y todo lo que estaba debajo
+    # (fila en blanco + "Fuente:") se recorre una fila hacia abajo.
+    FILA_S263 = 16
+    ws.insert_rows(FILA_S263)
+    ws.row_dimensions[FILA_S263].height = ws.row_dimensions[15].height
+    for col in range(1, 10):
+        src = ws.cell(15, col)
+        dst = ws.cell(FILA_S263, col)
+        if src.has_style:
+            dst.font          = copy(src.font)
+            dst.border        = copy(src.border)
+            dst.fill          = copy(src.fill)
+            dst.number_format = src.number_format
+            dst.alignment     = copy(src.alignment)
+    ws.cell(FILA_S263, 2).value = PP_NOMBRES["S263"]
+
     ws['B4'] = (f"REPORTE DEL EJERCICIO PRESUPUESTAL {tf['anio']}\n"
                 f"(PERIODO 1 DE ENERO AL {tf['DIA_MES_ANIO']})")
     ws['E7'] = (f"\nPresupuesto\n1 enero al {tf['dia_mes_anio']}\n(millones de pesos)")
@@ -3207,7 +3226,7 @@ def hoja_comisario(wb_out, datos, tf, tpl):
     ws['F8'] = f"Presupuesto Programado\n1 de enero al {tf['dia_mes_anio']}\n"
     ws['G8'] = f"Presupuesto\n Ejercido\n1 de enero al {tf['dia_mes_anio']}\n"
     ws['H7'] = f"Variación (%) entre lo programado y ejercido\n1 de enero al {tf['dia_mes_anio']}"
-    ws['B17'] = f"Fuente: {tf['fuente_map']}"
+    ws['B18'] = f"Fuente: {tf['fuente_map']}"
 
     # ── Encabezados segunda tabla (capítulos, cols L-R) ───────────────
     ws['N7'] = (f"Presupuesto\n1 de enero al {tf['dia_mes_anio']}\n(millones de pesos)")
@@ -3217,10 +3236,11 @@ def hoja_comisario(wb_out, datos, tf, tpl):
     ws['Q7'] = (f"Variación (%) entre lo programado y ejercido\n"
                 f"1 de enero al {tf['dia_mes_anio']}")
 
-    # ── Tabla 1: datos por Pp (cols A-I, filas 9-15) ─────────────────
+    # ── Tabla 1: datos por Pp (cols A-I, filas 9-16) ─────────────────
     bloques_pp = datos.get("bloques_pp", {})
     for pp_k, fila in [("M001",9),("P021",10),("K017",11),
-                        ("S292",12),("S293",13),("S304",14),("S318",15)]:
+                        ("S292",12),("S293",13),("S304",14),("S318",15),
+                        ("S263",FILA_S263)]:
         d = pp.get(pp_k, {})
         orig_a = d.get("original_anual", 0) or 0
         mod_a  = d.get("modificado_anual", 0) or 0
@@ -3270,6 +3290,12 @@ def hoja_comisario(wb_out, datos, tf, tpl):
                 mot = motivo_pp(bp, 3)
             else:
                 mot = "La variación se encuentra en la partida 43101 Subsidios a la producción."
+        elif pp_k == "S263":
+            bp = bloques_pp.get(pp_k, {})
+            if bp and bp.get('partidas'):
+                mot = motivo_pp(bp, 3)
+            else:
+                mot = ""
         elif pp_k == "S318":
             mot = "La variación se encuentra en la partida 43101 Subsidios a la producción."
         elif pp_k == "S293":
@@ -3345,7 +3371,7 @@ def generar_cuadros(ruta_entrada: str, ruta_salida: str = None,
     Lee la base MAP del día (CSV o xlsx) y genera los 4 cuadros.
     Los templates están embebidos — no se necesitan archivos externos.
     """
-    print(f" Leyendo: {ruta_entrada}")
+    print(f"📂 Leyendo: {ruta_entrada}")
 
     # Fecha
     if mes_corte and anio_corte:
@@ -3353,7 +3379,7 @@ def generar_cuadros(ruta_entrada: str, ruta_salida: str = None,
     else:
         fecha = detectar_fecha(ruta_entrada)
     tf = textos_fecha(fecha)
-    print(f" Fecha de corte: {tf['dia_mes_anio']}")
+    print(f"📅 Fecha de corte: {tf['dia_mes_anio']}")
 
     # Leer datos
     ext = os.path.splitext(ruta_entrada)[1].lower()
@@ -3413,7 +3439,7 @@ def _colab_main():
         if args:
             generar_cuadros(args[0])
         else:
-            ruta = input(" Ruta del archivo MAP (.csv o .xlsx): ").strip()
+            ruta = input("📂 Ruta del archivo MAP (.csv o .xlsx): ").strip()
             if ruta:
                 generar_cuadros(ruta)
         return
@@ -3422,10 +3448,10 @@ def _colab_main():
     print("  GENERADOR DE CUADROS COCODI — SADER MAP 2026")
     print("═" * 55)
     print()
-    print(" Selecciona el archivo MAP del día (.csv o .xlsx):")
+    print("📂 Selecciona el archivo MAP del día (.csv o .xlsx):")
     sub = _f.upload()
     if not sub:
-        print("  No se subió ningún archivo.")
+        print("⚠️  No se subió ningún archivo.")
         return
 
     nombre, contenido = next(iter(sub.items()))
@@ -3439,7 +3465,7 @@ def _colab_main():
     print("⬇️  Descargando archivo generado...")
     _f.download(ruta_out)
     print()
-    print(" ¡Listo! Revisa tu carpeta de descargas.")
+    print("✅ ¡Listo! Revisa tu carpeta de descargas.")
 
 
 if __name__ == "__main__":
