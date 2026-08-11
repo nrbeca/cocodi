@@ -5,7 +5,7 @@
 ║  y Presupuesto Comisario — a partir del archivo MAP del día          ║
 ╚══════════════════════════════════════════════════════════════════════╝
 
-UNA SOLA CELDA (cada día):
+USO EN GOOGLE COLAB — UNA SOLA CELDA (cada día):
 
     !python generar_cuadros_cocodi.py
 
@@ -21,7 +21,7 @@ def _ensure(pkg):
     try:
         importlib.import_module(pkg)
     except ImportError:
-        print(f"   Instalando {pkg}...")
+        print(f"  📦 Instalando {pkg}...")
         subprocess.check_call([_sys.executable, "-m", "pip", "install", pkg, "-q"])
 
 _ensure("openpyxl")
@@ -2609,11 +2609,11 @@ def _sf(v):
     except: return 0.0
 
 def leer_xlsx_map(path: str) -> dict:
-    print("   Procesando xlsx con hojas TD...")
+    print("  📊 Procesando xlsx con hojas TD...")
     import openpyxl as _opxl
     xl = pd.ExcelFile(path)
     hojas = xl.sheet_names
-    print(f"   Hojas: {hojas}")
+    print(f"  📋 Hojas: {hojas}")
     # Abrir con openpyxl una sola vez para lectura de columnas con nombre
     _wb = _opxl.load_workbook(path, data_only=True, read_only=True)
 
@@ -2716,7 +2716,7 @@ def leer_xlsx_map(path: str) -> dict:
                     disponible  = _sf(row[100].value),  # CW
                 )
     except Exception as _e:
-        print(f"    cap_com: {_e}")
+        print(f"  ⚠️  cap_com: {_e}")
     finally:
         _wb.close()
 
@@ -2807,10 +2807,10 @@ def leer_xlsx_map(path: str) -> dict:
                     if info:
                         bloques_pp[info['pp']] = info
                     else:
-                        print(f"    bloques_pp: no se pudo leer el bloque en fila {row_idx}, columna {c.column}")
+                        print(f"  ⚠️  bloques_pp: no se pudo leer el bloque en fila {row_idx}, columna {c.column}")
         _wb2.close()
     except Exception as _e2:
-        print(f"    bloques_pp: {_e2}")
+        print(f"  ⚠️  bloques_pp: {_e2}")
 
     return dict(pp=pp_rows, cap=cap_dict, pp_cap=pp_cap,
                 cap_com=cap_com, bloques=bloques, bloques_pp=bloques_pp)
@@ -2976,10 +2976,45 @@ def hoja_pp(wb_out, datos, tf, tpl):
     ws = wb['Pp']
     pp = datos["pp"]
 
+    # ── Insertar fila para S263 dentro del grupo de Subsidios sujetos a
+    #    Reglas de Operación (junto a S292, S293, S304, S318), antes de
+    #    S292. Esto recorre una fila hacia abajo todo lo que va después
+    #    (Subtotal Inversión, K017, Subtotal Administrativos, P021, M001,
+    #    Fuente, Notas). IMPORTANTE: insert_rows() no recorre las celdas
+    #    combinadas automáticamente, así que se hace a mano.
+    FILA_S263 = 14
+    from openpyxl.utils.cell import range_boundaries as _rb
+
+    merges_a_mover = [str(mg) for mg in list(ws.merged_cells.ranges)
+                       if mg.min_row >= FILA_S263]
+    for mg_str in merges_a_mover:
+        ws.unmerge_cells(mg_str)
+
+    ws.insert_rows(FILA_S263)
+
+    for mg_str in merges_a_mover:
+        c1, r1, c2, r2 = _rb(mg_str)
+        r1 += 1; r2 += 1
+        ws.merge_cells(start_row=r1, start_column=c1, end_row=r2, end_column=c2)
+
+    ws.row_dimensions[FILA_S263].height = ws.row_dimensions[FILA_S263 + 1].height
+    for col in range(1, 10):
+        src = ws.cell(FILA_S263 + 1, col)   # fila de S292, ya recorrida un lugar
+        dst = ws.cell(FILA_S263, col)
+        if src.has_style:
+            dst.font          = copy(src.font)
+            dst.border        = copy(src.border)
+            dst.fill          = copy(src.fill)
+            dst.number_format = src.number_format
+            dst.alignment     = copy(src.alignment)
+    ws.cell(FILA_S263, 1).value = "S263"
+    ws.cell(FILA_S263, 2).value = PP_NOMBRES["S263"]
+    ws.cell(13, 3).value = 5   # Número de Pp del subtotal Subsidios (antes 4)
+
     ws['B1']  = f"Avance en el ejercicio del presupuesto {tf['anio']} del Sector Central de AGRICULTURA"
     ws['B5']  = f"Cifras con corte al cierre del {tf['trimestre']} de {tf['anio']}"
     ws['G6']  = f"Corte al {tf['dia_mes_anio']}"
-    ws['B23'] = f"Fuente: {tf['fuente_map']}"
+    ws['B24'] = f"Fuente: {tf['fuente_map']}"
 
     def set_pp_row(fila, pp_k):
         d = pp.get(pp_k, {})
@@ -2996,12 +3031,12 @@ def hoja_pp(wb_out, datos, tf, tpl):
         return orig, mod, mod_p, ejrc
 
     # Pp individuales
-    subsidios = ["S292","S293","S304","S318"]
-    pp_filas = [("S292",14),("S293",15),("S304",16),("S318",17),
-                ("K017",19),("P021",21),("M001",22)]
+    subsidios = ["S263","S292","S293","S304","S318"]
+    pp_filas = [("S263",FILA_S263),("S292",15),("S293",16),("S304",17),("S318",18),
+                ("K017",20),("P021",22),("M001",23)]
     totales = {k: set_pp_row(f, k) for k, f in pp_filas}
 
-    # Subtotal Subsidios (fila 13): suma S292+S293+S304+S318
+    # Subtotal Subsidios (fila 13): suma S263+S292+S293+S304+S318
     ws.cell(13, 4).value = sum(totales[k][0] for k in subsidios if k in totales)
     ws.cell(13, 5).value = sum(totales[k][1] for k in subsidios if k in totales)
     ws.cell(13, 6).value = _var(ws.cell(13,4).value, ws.cell(13,5).value)
@@ -3009,31 +3044,31 @@ def hoja_pp(wb_out, datos, tf, tpl):
     ws.cell(13, 8).value = sum(totales[k][3] for k in subsidios if k in totales)
     ws.cell(13, 9).value = _var(ws.cell(13,7).value, ws.cell(13,8).value)
 
-    # Subtotal Inversión K017 (fila 18)
+    # Subtotal Inversión K017 (fila 19)
     t_k017 = totales.get("K017", (0,0,0,0))
-    ws.cell(18, 4).value = t_k017[0]; ws.cell(18, 5).value = t_k017[1]
-    ws.cell(18, 6).value = _var(t_k017[0], t_k017[1])
-    ws.cell(18, 7).value = t_k017[2]; ws.cell(18, 8).value = t_k017[3]
-    ws.cell(18, 9).value = _var(t_k017[2], t_k017[3])
+    ws.cell(19, 4).value = t_k017[0]; ws.cell(19, 5).value = t_k017[1]
+    ws.cell(19, 6).value = _var(t_k017[0], t_k017[1])
+    ws.cell(19, 7).value = t_k017[2]; ws.cell(19, 8).value = t_k017[3]
+    ws.cell(19, 9).value = _var(t_k017[2], t_k017[3])
 
-    # Subtotal Administrativos P021+M001 (fila 20)
+    # Subtotal Administrativos P021+M001 (fila 21)
     adm = ["P021","M001"]
-    ws.cell(20, 4).value = sum(totales[k][0] for k in adm if k in totales)
-    ws.cell(20, 5).value = sum(totales[k][1] for k in adm if k in totales)
-    ws.cell(20, 6).value = _var(ws.cell(20,4).value, ws.cell(20,5).value)
-    ws.cell(20, 7).value = sum(totales[k][2] for k in adm if k in totales)
-    ws.cell(20, 8).value = sum(totales[k][3] for k in adm if k in totales)
-    ws.cell(20, 9).value = _var(ws.cell(20,7).value, ws.cell(20,8).value)
+    ws.cell(21, 4).value = sum(totales[k][0] for k in adm if k in totales)
+    ws.cell(21, 5).value = sum(totales[k][1] for k in adm if k in totales)
+    ws.cell(21, 6).value = _var(ws.cell(21,4).value, ws.cell(21,5).value)
+    ws.cell(21, 7).value = sum(totales[k][2] for k in adm if k in totales)
+    ws.cell(21, 8).value = sum(totales[k][3] for k in adm if k in totales)
+    ws.cell(21, 9).value = _var(ws.cell(21,7).value, ws.cell(21,8).value)
 
-    # Total general (fila 12): suma de subtotales 13+18+20
+    # Total general (fila 12): suma de subtotales 13+19+21
     for col in [4,5,7,8]:
-        ws.cell(12, col).value = (ws.cell(13,col).value + ws.cell(18,col).value
-                                  + ws.cell(20,col).value)
+        ws.cell(12, col).value = (ws.cell(13,col).value + ws.cell(19,col).value
+                                  + ws.cell(21,col).value)
     ws.cell(12, 6).value = _var(ws.cell(12,4).value, ws.cell(12,5).value)
     ws.cell(12, 9).value = _var(ws.cell(12,7).value, ws.cell(12,8).value)
     # Número de Pp total
     ws.cell(12, 3).value = sum(ws.cell(r,3).value or 0
-                               for r in [13,18,20] if ws.cell(r,3).value)
+                               for r in [13,19,21] if ws.cell(r,3).value)
 
     if 'Pp' in wb_out.sheetnames: del wb_out['Pp']
     ws_n = wb_out.create_sheet('Pp')
@@ -3049,6 +3084,54 @@ def hoja_pp_cap(wb_out, datos, tf, tpl):
     cap  = datos["cap"]
     pp   = datos["pp"]
     pc   = datos["pp_cap"]
+
+    # ── Insertar bloque completo de S263 (título + capítulo 3000 + total)
+    #    entre el bloque de K017 y el de S292. Se copia el patrón exacto
+    #    de un bloque de un solo capítulo (como el de K017) y se recorren
+    #    7 filas hacia abajo todos los bloques siguientes (S292 en
+    #    adelante). IMPORTANTE: insert_rows() de openpyxl NO recorre las
+    #    celdas combinadas automáticamente, así que hay que desplazarlas
+    #    a mano (guardar, quitar, insertar filas, volver a combinar).
+    FILA_S263_TITULO = 59
+    N_FILAS_BLOQUE = 7   # título + 2 encabezados + 1 dato + total + 2 en blanco
+
+    merges_a_mover = [str(mg) for mg in list(ws.merged_cells.ranges)
+                       if mg.min_row >= FILA_S263_TITULO]
+    for mg_str in merges_a_mover:
+        ws.unmerge_cells(mg_str)
+
+    ws.insert_rows(FILA_S263_TITULO, N_FILAS_BLOQUE)
+
+    from openpyxl.utils.cell import range_boundaries
+    from openpyxl.utils import get_column_letter
+    for mg_str in merges_a_mover:
+        c1, r1, c2, r2 = range_boundaries(mg_str)
+        r1 += N_FILAS_BLOQUE; r2 += N_FILAS_BLOQUE
+        ws.merge_cells(start_row=r1, start_column=c1, end_row=r2, end_column=c2)
+
+    def _clonar_fila(src_row, dst_row):
+        for col in range(1, 10):
+            src = ws.cell(src_row, col)
+            dst = ws.cell(dst_row, col)
+            if src.has_style:
+                dst.font          = copy(src.font)
+                dst.border        = copy(src.border)
+                dst.fill          = copy(src.fill)
+                dst.number_format = src.number_format
+                dst.alignment     = copy(src.alignment)
+        ws.row_dimensions[dst_row].height = ws.row_dimensions[src_row].height
+
+    # Clonar formato desde el bloque de K017 (título=52, headers=53-54, dato=55, total=56)
+    _clonar_fila(52, 59); _clonar_fila(53, 60); _clonar_fila(54, 61)
+    _clonar_fila(55, 62); _clonar_fila(56, 63)
+    ws.merge_cells(start_row=59, start_column=2, end_row=59, end_column=9)
+    ws.merge_cells(start_row=63, start_column=2, end_row=63, end_column=3)
+    ws.cell(59, 1).value = "S263"
+    ws.cell(59, 2).value = PP_NOMBRES["S263"]
+    ws.cell(62, 1).value = "=$A$59&B62"
+    ws.cell(62, 2).value = 3000
+    ws.cell(62, 3).value = "Servicios Generales"
+    ws.cell(63, 2).value = "Total"
 
     ws['B8']  = f"Avance en el ejercicio del presupuesto {tf['anio']} del Sector Central de AGRICULTURA"
     ws['B9']  = f"Cifras con corte al cierre del {tf['trimestre']} de {tf['anio']}"
@@ -3073,15 +3156,16 @@ def hoja_pp_cap(wb_out, datos, tf, tpl):
     set_row(23, pp.get("Total general", {}))
     set_row(27, pp.get("Total general", {}))  # fila 27 = total sin encabezado (en plantilla)
 
-    # Tablas por Pp (filas por plantilla de Libro2)
+    # Tablas por Pp (filas por plantilla de Libro2; S263 insertado entre K017 y S292)
     configs = [
         ("P021", [(1000,32),(2000,33),(3000,34),(4000,35)], 36),
         ("M001", [(1000,41),(2000,42),(3000,43)], 44),
         ("K017", [(7000,55)], 56),
-        ("S292", [(1000,62),(2000,63),(3000,64),(4000,65)], 66),
-        ("S293", [(2000,72),(3000,73),(4000,74)], 75),
-        ("S304", [(4000,81)], 82),
-        ("S318", [(4000,88)], 89),
+        ("S263", [(3000,62)], 63),
+        ("S292", [(1000,69),(2000,70),(3000,71),(4000,72)], 73),
+        ("S293", [(2000,79),(3000,80),(4000,81)], 82),
+        ("S304", [(4000,88)], 89),
+        ("S318", [(4000,95)], 96),
     ]
     from openpyxl.styles import Font, PatternFill
     COLOR_TOTAL_CAP = "BC955C"
