@@ -3287,22 +3287,29 @@ def hoja_comisario(wb_out, datos, tf, tpl):
 
     # ── Insertar fila para S263 (no estaba en la plantilla original) ──
     # Va justo después de K017 y antes de S292, para que quede agrupada
-    # con el resto de los programas "S" en orden. Se inserta UNA sola fila
-    # física (fila 12), lo que recorre hacia abajo tanto el resto de la
-    # tabla 1 (Pp, cols A-I) como la tabla 2 (capítulos, cols L-R), que
-    # comparte esas mismas filas de la hoja.
+    # con el resto de los programas "S" en orden. IMPORTANTE: NO se usa
+    # insert_rows() porque eso recorre TODA la fila, incluida la tabla 2
+    # (capítulos, cols L-R) que vive en las mismas filas pero es una
+    # tabla independiente — eso dejaba un hueco y desalineaba esa tabla.
+    # En su lugar, se recorren manualmente solo las columnas A-I (1-9),
+    # de abajo hacia arriba, dejando intactas las columnas de la tabla 2.
     FILA_S263 = 12
-    ws.insert_rows(FILA_S263)
-    ws.row_dimensions[FILA_S263].height = ws.row_dimensions[FILA_S263 + 1].height
+    ULTIMA_FILA_TABLA1 = 18   # incluye blanco(17) y "Fuente:"(antes en 17, ahora 18)
+    for r in range(ULTIMA_FILA_TABLA1, FILA_S263, -1):
+        ws.row_dimensions[r].height = ws.row_dimensions[r - 1].height
+        for col in range(1, 10):
+            src = ws.cell(r - 1, col)
+            dst = ws.cell(r, col)
+            dst.value = src.value
+            if src.has_style:
+                dst.font          = copy(src.font)
+                dst.border        = copy(src.border)
+                dst.fill          = copy(src.fill)
+                dst.number_format = src.number_format
+                dst.alignment     = copy(src.alignment)
+    # Fila 12 queda libre para S263: limpiar valores heredados y poner el nombre
     for col in range(1, 10):
-        src = ws.cell(FILA_S263 + 1, col)   # fila de S292, ya recorrida un lugar
-        dst = ws.cell(FILA_S263, col)
-        if src.has_style:
-            dst.font          = copy(src.font)
-            dst.border        = copy(src.border)
-            dst.fill          = copy(src.fill)
-            dst.number_format = src.number_format
-            dst.alignment     = copy(src.alignment)
+        ws.cell(FILA_S263, col).value = None
     ws.cell(FILA_S263, 2).value = PP_NOMBRES["S263"]
 
     ws['B4'] = (f"REPORTE DEL EJERCICIO PRESUPUESTAL {tf['anio']}\n"
@@ -3420,7 +3427,7 @@ def hoja_comisario(wb_out, datos, tf, tpl):
     bloq    = datos.get("bloques", {})
     n_parts_com = {1000:4, 2000:4, 3000:5, 4000:4, 7000:0}
 
-    for cap_k, fila in [(1000,9),(2000,10),(3000,11),(4000,13),(7000,14)]:
+    for cap_k, fila in [(1000,9),(2000,10),(3000,11),(4000,12),(7000,13)]:
         dc    = cap_com.get(cap_k, {})
         ori_p = dc.get("original_p", 0) or 0
         mod_p = dc.get("modificado_p", 0) or 0
