@@ -5,7 +5,7 @@
 ║  y Presupuesto Comisario — a partir del archivo MAP del día          ║
 ╚══════════════════════════════════════════════════════════════════════╝
 
-USO EN GOOGLE COLAB — UNA SOLA CELDA (cada día):
+UNA SOLA CELDA (cada día):
 
     !python generar_cuadros_cocodi.py
 
