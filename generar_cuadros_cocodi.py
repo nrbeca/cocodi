@@ -21,7 +21,7 @@ def _ensure(pkg):
     try:
         importlib.import_module(pkg)
     except ImportError:
-        print(f"   Instalando {pkg}...")
+        print(f"  📦 Instalando {pkg}...")
         subprocess.check_call([_sys.executable, "-m", "pip", "install", pkg, "-q"])
 
 _ensure("openpyxl")
@@ -3202,14 +3202,16 @@ def hoja_comisario(wb_out, datos, tf, tpl):
     bloq = datos["bloques"]
 
     # ── Insertar fila para S263 (no estaba en la plantilla original) ──
-    # Se copia el formato (fuente, bordes, relleno, alto de fila) de la
-    # fila S318 (15) hacia la nueva fila 16, y todo lo que estaba debajo
-    # (fila en blanco + "Fuente:") se recorre una fila hacia abajo.
-    FILA_S263 = 16
+    # Va justo después de K017 y antes de S292, para que quede agrupada
+    # con el resto de los programas "S" en orden. Se inserta UNA sola fila
+    # física (fila 12), lo que recorre hacia abajo tanto el resto de la
+    # tabla 1 (Pp, cols A-I) como la tabla 2 (capítulos, cols L-R), que
+    # comparte esas mismas filas de la hoja.
+    FILA_S263 = 12
     ws.insert_rows(FILA_S263)
-    ws.row_dimensions[FILA_S263].height = ws.row_dimensions[15].height
+    ws.row_dimensions[FILA_S263].height = ws.row_dimensions[FILA_S263 + 1].height
     for col in range(1, 10):
-        src = ws.cell(15, col)
+        src = ws.cell(FILA_S263 + 1, col)   # fila de S292, ya recorrida un lugar
         dst = ws.cell(FILA_S263, col)
         if src.has_style:
             dst.font          = copy(src.font)
@@ -3236,11 +3238,10 @@ def hoja_comisario(wb_out, datos, tf, tpl):
     ws['Q7'] = (f"Variación (%) entre lo programado y ejercido\n"
                 f"1 de enero al {tf['dia_mes_anio']}")
 
-    # ── Tabla 1: datos por Pp (cols A-I, filas 9-16) ─────────────────
+    # ── Tabla 1: datos por Pp (cols A-I) ─────────────────────────────
     bloques_pp = datos.get("bloques_pp", {})
-    for pp_k, fila in [("M001",9),("P021",10),("K017",11),
-                        ("S292",12),("S293",13),("S304",14),("S318",15),
-                        ("S263",FILA_S263)]:
+    for pp_k, fila in [("M001",9),("P021",10),("K017",11),("S263",FILA_S263),
+                        ("S292",13),("S293",14),("S304",15),("S318",16)]:
         d = pp.get(pp_k, {})
         orig_a = d.get("original_anual", 0) or 0
         mod_a  = d.get("modificado_anual", 0) or 0
@@ -3335,7 +3336,7 @@ def hoja_comisario(wb_out, datos, tf, tpl):
     bloq    = datos.get("bloques", {})
     n_parts_com = {1000:4, 2000:4, 3000:5, 4000:4, 7000:0}
 
-    for cap_k, fila in [(1000,9),(2000,10),(3000,11),(4000,12),(7000,13)]:
+    for cap_k, fila in [(1000,9),(2000,10),(3000,11),(4000,13),(7000,14)]:
         dc    = cap_com.get(cap_k, {})
         ori_p = dc.get("original_p", 0) or 0
         mod_p = dc.get("modificado_p", 0) or 0
