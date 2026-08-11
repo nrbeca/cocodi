@@ -67,7 +67,7 @@ if archivo_map:
         dia_sel = st.number_input("Día de corte", min_value=1, max_value=DIAS_FIN_MES[mes_sel],
                                    value=min(fecha_auto["dia"], DIAS_FIN_MES[mes_sel]),
                                    key="dia_cocodi", step=1)
-    st.caption(f"📅 Se generará el cuadro con corte al {dia_sel} de {MESES_ES[mes_sel]} de {anio_sel}")
+    st.caption(f"Se generará el cuadro con corte al {dia_sel} de {MESES_ES[mes_sel]} de {anio_sel}")
 
     if st.button("Generar cuadros COCODI", key="btn_cocodi"):
         with st.spinner("Procesando…"):
