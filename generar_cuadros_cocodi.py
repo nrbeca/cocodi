@@ -3126,6 +3126,14 @@ def hoja_pp_cap(wb_out, datos, tf, tpl):
     _clonar_fila(52, 59); _clonar_fila(53, 60); _clonar_fila(54, 61)
     _clonar_fila(55, 62); _clonar_fila(56, 63)
     ws.merge_cells(start_row=59, start_column=2, end_row=59, end_column=9)
+    # Encabezados (60-61): replicar exactamente el patrón combinado de K017
+    # (B53:C53, D53:E53, F53:F54, G53:H53, I53:I54) — sin esto el texto se
+    # aprieta en columnas angostas y se hace multilínea.
+    ws.merge_cells(start_row=60, start_column=2, end_row=60, end_column=3)   # Capítulo
+    ws.merge_cells(start_row=60, start_column=4, end_row=60, end_column=5)   # Presupuesto Anual
+    ws.merge_cells(start_row=60, start_column=6, end_row=61, end_column=6)   # % Variación
+    ws.merge_cells(start_row=60, start_column=7, end_row=60, end_column=8)   # Presupuesto al periodo
+    ws.merge_cells(start_row=60, start_column=9, end_row=61, end_column=9)   # % Variación
     ws.merge_cells(start_row=63, start_column=2, end_row=63, end_column=3)
     ws.cell(59, 1).value = "S263"
     ws.cell(59, 2).value = PP_NOMBRES["S263"]
