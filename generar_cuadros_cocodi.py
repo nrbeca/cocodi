@@ -21,7 +21,7 @@ def _ensure(pkg):
     try:
         importlib.import_module(pkg)
     except ImportError:
-        print(f"  📦 Instalando {pkg}...")
+        print(f"   Instalando {pkg}...")
         subprocess.check_call([_sys.executable, "-m", "pip", "install", pkg, "-q"])
 
 _ensure("openpyxl")
@@ -2609,11 +2609,11 @@ def _sf(v):
     except: return 0.0
 
 def leer_xlsx_map(path: str) -> dict:
-    print("  📊 Procesando xlsx con hojas TD...")
+    print("   Procesando xlsx con hojas TD...")
     import openpyxl as _opxl
     xl = pd.ExcelFile(path)
     hojas = xl.sheet_names
-    print(f"  📋 Hojas: {hojas}")
+    print(f"   Hojas: {hojas}")
     # Abrir con openpyxl una sola vez para lectura de columnas con nombre
     _wb = _opxl.load_workbook(path, data_only=True, read_only=True)
 
@@ -2716,7 +2716,7 @@ def leer_xlsx_map(path: str) -> dict:
                     disponible  = _sf(row[100].value),  # CW
                 )
     except Exception as _e:
-        print(f"  ⚠️  cap_com: {_e}")
+        print(f"    cap_com: {_e}")
     finally:
         _wb.close()
 
@@ -2807,10 +2807,10 @@ def leer_xlsx_map(path: str) -> dict:
                     if info:
                         bloques_pp[info['pp']] = info
                     else:
-                        print(f"  ⚠️  bloques_pp: no se pudo leer el bloque en fila {row_idx}, columna {c.column}")
+                        print(f"    bloques_pp: no se pudo leer el bloque en fila {row_idx}, columna {c.column}")
         _wb2.close()
     except Exception as _e2:
-        print(f"  ⚠️  bloques_pp: {_e2}")
+        print(f"    bloques_pp: {_e2}")
 
     return dict(pp=pp_rows, cap=cap_dict, pp_cap=pp_cap,
                 cap_com=cap_com, bloques=bloques, bloques_pp=bloques_pp)
