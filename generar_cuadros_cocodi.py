@@ -3165,6 +3165,39 @@ def hoja_pp_cap(wb_out, datos, tf, tpl):
     set_row(23, pp.get("Total general", {}))
     set_row(27, pp.get("Total general", {}))  # fila 27 = total sin encabezado (en plantilla)
 
+    # ── Ampliar bloques de S304 y S318: también tienen movimiento en
+    #    capítulo 2000 y 3000 (montos chicos), no solo el 4000. Se
+    #    insertan 2 filas de dato extra antes de cada "Total", igual que
+    #    se hizo con S263 (manejo manual de merges porque insert_rows no
+    #    las recorre solo).
+    def _expandir_bloque(fila_dato_actual, fila_total_actual, n_extra):
+        merges_a_mover = [str(mg) for mg in list(ws.merged_cells.ranges)
+                           if mg.min_row >= fila_total_actual]
+        for mg_str in merges_a_mover:
+            ws.unmerge_cells(mg_str)
+        ws.insert_rows(fila_total_actual, n_extra)
+        from openpyxl.utils.cell import range_boundaries as _rb2
+        for mg_str in merges_a_mover:
+            c1, r1, c2, r2 = _rb2(mg_str)
+            r1 += n_extra; r2 += n_extra
+            ws.merge_cells(start_row=r1, start_column=c1, end_row=r2, end_column=c2)
+        for i in range(n_extra):
+            dst = fila_total_actual + i
+            for col in range(1, 10):
+                src = ws.cell(fila_dato_actual, col)
+                d = ws.cell(dst, col)
+                if src.has_style:
+                    d.font          = copy(src.font)
+                    d.border        = copy(src.border)
+                    d.fill          = copy(src.fill)
+                    d.number_format = src.number_format
+                    d.alignment     = copy(src.alignment)
+            ws.row_dimensions[dst].height = ws.row_dimensions[fila_dato_actual].height
+        return fila_total_actual + n_extra   # nueva fila de Total
+
+    total_s304 = _expandir_bloque(88, 89, 2)   # 88,89,90 = 2000,3000,4000 ; total=91
+    total_s318 = _expandir_bloque(97, 98, 2)   # 97,98,99 = 2000,3000,4000 ; total=100
+
     # Tablas por Pp (filas por plantilla de Libro2; S263 insertado entre K017 y S292)
     configs = [
         ("P021", [(1000,32),(2000,33),(3000,34),(4000,35)], 36),
@@ -3173,8 +3206,8 @@ def hoja_pp_cap(wb_out, datos, tf, tpl):
         ("S263", [(3000,62)], 63),
         ("S292", [(1000,69),(2000,70),(3000,71),(4000,72)], 73),
         ("S293", [(2000,79),(3000,80),(4000,81)], 82),
-        ("S304", [(4000,88)], 89),
-        ("S318", [(4000,95)], 96),
+        ("S304", [(2000,88),(3000,89),(4000,90)], total_s304),
+        ("S318", [(2000,97),(3000,98),(4000,99)], total_s318),
     ]
     from openpyxl.styles import Font, PatternFill
     COLOR_TOTAL_CAP = "BC955C"
