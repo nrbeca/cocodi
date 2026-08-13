@@ -21,7 +21,7 @@ def _ensure(pkg):
     try:
         importlib.import_module(pkg)
     except ImportError:
-        print(f"   Instalando {pkg}...")
+        print(f"  📦 Instalando {pkg}...")
         subprocess.check_call([_sys.executable, "-m", "pip", "install", pkg, "-q"])
 
 _ensure("openpyxl")
@@ -2720,7 +2720,7 @@ def leer_xlsx_map(path: str) -> dict:
                     disponible  = _sf(row[100].value),  # CW
                 )
     except Exception as _e:
-        print(f"    cap_com: {_e}")
+        print(f"  ⚠️  cap_com: {_e}")
     finally:
         _wb.close()
 
@@ -3182,7 +3182,7 @@ def hoja_pp_cap(wb_out, datos, tf, tpl):
             # Bloque nuevo (ej. S263): insertar donde le corresponda, entre
             # el bloque anterior y el siguiente, clonando formato de K017.
             titulo = 59 + desplazamiento   # posición original de "S292" antes de moverlo
-            n_filas_bloque = 3 + n + 1     # título + 2 encabezados + datos + total
+            n_filas_bloque = 3 + n + 1 + 2  # título + 2 encabezados + datos + total + 2 en blanco
             _ajustar_filas(titulo, n_filas_bloque)
             kt, kd, _kn, ktot = resultado["K017"]
             _clonar_fila(kt, titulo, con_valor=False)
