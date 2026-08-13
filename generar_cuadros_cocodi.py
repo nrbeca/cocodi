@@ -2406,7 +2406,11 @@ CAPITULOS = {
     2000: "Materiales y Suministros",
     3000: "Servicios Generales",
     4000: "Transferencias, asignaciones, subsidios y otras ayudas",
+    5000: "Bienes Muebles, Inmuebles e Intangibles",
+    6000: "Inversión Pública",
     7000: "Inversiones financieras y otras provisiones",
+    8000: "Participaciones y Aportaciones",
+    9000: "Deuda Pública",
 }
 
 MESES_ES = {1:"enero",2:"febrero",3:"marzo",4:"abril",5:"mayo",6:"junio",
@@ -3024,48 +3028,36 @@ def hoja_pp(wb_out, datos, tf, tpl):
         ejrc  = d.get("ejercido", 0) or 0
         ws.cell(fila, 4).value = orig
         ws.cell(fila, 5).value = mod
-        ws.cell(fila, 6).value = _var(orig, mod)
+        ws.cell(fila, 6).value = f"=IFERROR((E{fila}-D{fila})/D{fila},0)"
         ws.cell(fila, 7).value = mod_p
         ws.cell(fila, 8).value = ejrc
-        ws.cell(fila, 9).value = _var(mod_p, ejrc)
-        return orig, mod, mod_p, ejrc
+        ws.cell(fila, 9).value = f"=IFERROR((H{fila}-G{fila})/G{fila},0)"
 
     # Pp individuales
-    subsidios = ["S263","S292","S293","S304","S318"]
     pp_filas = [("S263",FILA_S263),("S292",15),("S293",16),("S304",17),("S318",18),
                 ("K017",20),("P021",22),("M001",23)]
-    totales = {k: set_pp_row(f, k) for k, f in pp_filas}
+    for k, f in pp_filas:
+        set_pp_row(f, k)
 
-    # Subtotal Subsidios (fila 13): suma S263+S292+S293+S304+S318
-    ws.cell(13, 4).value = sum(totales[k][0] for k in subsidios if k in totales)
-    ws.cell(13, 5).value = sum(totales[k][1] for k in subsidios if k in totales)
-    ws.cell(13, 6).value = _var(ws.cell(13,4).value, ws.cell(13,5).value)
-    ws.cell(13, 7).value = sum(totales[k][2] for k in subsidios if k in totales)
-    ws.cell(13, 8).value = sum(totales[k][3] for k in subsidios if k in totales)
-    ws.cell(13, 9).value = _var(ws.cell(13,7).value, ws.cell(13,8).value)
+    def _formula_subtotal(fila, d1, d2):
+        for col in "DEGH":
+            ws[f'{col}{fila}'] = (f"=SUM({col}{d1})" if d1 == d2
+                                  else f"=SUM({col}{d1}:{col}{d2})")
+        ws.cell(fila, 6).value = f"=IFERROR((E{fila}-D{fila})/D{fila},0)"
+        ws.cell(fila, 9).value = f"=IFERROR((H{fila}-G{fila})/G{fila},0)"
 
-    # Subtotal Inversión K017 (fila 19)
-    t_k017 = totales.get("K017", (0,0,0,0))
-    ws.cell(19, 4).value = t_k017[0]; ws.cell(19, 5).value = t_k017[1]
-    ws.cell(19, 6).value = _var(t_k017[0], t_k017[1])
-    ws.cell(19, 7).value = t_k017[2]; ws.cell(19, 8).value = t_k017[3]
-    ws.cell(19, 9).value = _var(t_k017[2], t_k017[3])
-
-    # Subtotal Administrativos P021+M001 (fila 21)
-    adm = ["P021","M001"]
-    ws.cell(21, 4).value = sum(totales[k][0] for k in adm if k in totales)
-    ws.cell(21, 5).value = sum(totales[k][1] for k in adm if k in totales)
-    ws.cell(21, 6).value = _var(ws.cell(21,4).value, ws.cell(21,5).value)
-    ws.cell(21, 7).value = sum(totales[k][2] for k in adm if k in totales)
-    ws.cell(21, 8).value = sum(totales[k][3] for k in adm if k in totales)
-    ws.cell(21, 9).value = _var(ws.cell(21,7).value, ws.cell(21,8).value)
+    # Subtotal Subsidios (fila 13): suma S263+S292+S293+S304+S318 (filas 14-18)
+    _formula_subtotal(13, FILA_S263, 18)
+    # Subtotal Inversión K017 (fila 19): suma la fila 20
+    _formula_subtotal(19, 20, 20)
+    # Subtotal Administrativos P021+M001 (fila 21): suma filas 22-23
+    _formula_subtotal(21, 22, 23)
 
     # Total general (fila 12): suma de subtotales 13+19+21
-    for col in [4,5,7,8]:
-        ws.cell(12, col).value = (ws.cell(13,col).value + ws.cell(19,col).value
-                                  + ws.cell(21,col).value)
-    ws.cell(12, 6).value = _var(ws.cell(12,4).value, ws.cell(12,5).value)
-    ws.cell(12, 9).value = _var(ws.cell(12,7).value, ws.cell(12,8).value)
+    for col in "DEGH":
+        ws[f'{col}12'] = f"=+{col}13+{col}19+{col}21"
+    ws.cell(12, 6).value = "=IFERROR((E12-D12)/D12,0)"
+    ws.cell(12, 9).value = "=IFERROR((H12-G12)/G12,0)"
     # Número de Pp total
     ws.cell(12, 3).value = sum(ws.cell(r,3).value or 0
                                for r in [13,19,21] if ws.cell(r,3).value)
@@ -3085,35 +3077,39 @@ def hoja_pp_cap(wb_out, datos, tf, tpl):
     pp   = datos["pp"]
     pc   = datos["pp_cap"]
 
-    # ── Insertar bloque completo de S263 (título + capítulo 3000 + total)
-    #    entre el bloque de K017 y el de S292. Se copia el patrón exacto
-    #    de un bloque de un solo capítulo (como el de K017) y se recorren
-    #    7 filas hacia abajo todos los bloques siguientes (S292 en
-    #    adelante). IMPORTANTE: insert_rows() de openpyxl NO recorre las
-    #    celdas combinadas automáticamente, así que hay que desplazarlas
-    #    a mano (guardar, quitar, insertar filas, volver a combinar).
-    FILA_S263_TITULO = 59
-    N_FILAS_BLOQUE = 7   # título + 2 encabezados + 1 dato + total + 2 en blanco
+    from openpyxl.styles import Font, PatternFill
+    from openpyxl.utils.cell import range_boundaries as _rb
+    COLOR_TOTAL_CAP = "BC955C"
 
-    merges_a_mover = [str(mg) for mg in list(ws.merged_cells.ranges)
-                       if mg.min_row >= FILA_S263_TITULO]
-    for mg_str in merges_a_mover:
-        ws.unmerge_cells(mg_str)
+    def _ajustar_filas(fila_desde, delta):
+        """Inserta (delta>0) o elimina (delta<0) filas a partir de fila_desde,
+        recorriendo a mano las celdas combinadas (insert_rows/delete_rows de
+        openpyxl NO las mueve solas)."""
+        if delta == 0:
+            return
+        merges_a_mover = [str(mg) for mg in list(ws.merged_cells.ranges)
+                           if mg.min_row >= fila_desde]
+        for mg_str in merges_a_mover:
+            ws.unmerge_cells(mg_str)
+        if delta > 0:
+            ws.insert_rows(fila_desde, delta)
+        else:
+            ws.delete_rows(fila_desde, -delta)
+        for mg_str in merges_a_mover:
+            c1, r1, c2, r2 = _rb(mg_str)
+            r1 += delta; r2 += delta
+            if r1 >= 1 and r2 >= r1:
+                try:
+                    ws.merge_cells(start_row=r1, start_column=c1, end_row=r2, end_column=c2)
+                except Exception:
+                    pass
 
-    ws.insert_rows(FILA_S263_TITULO, N_FILAS_BLOQUE)
-
-    from openpyxl.utils.cell import range_boundaries
-    from openpyxl.utils import get_column_letter
-    for mg_str in merges_a_mover:
-        c1, r1, c2, r2 = range_boundaries(mg_str)
-        r1 += N_FILAS_BLOQUE; r2 += N_FILAS_BLOQUE
-        ws.merge_cells(start_row=r1, start_column=c1, end_row=r2, end_column=c2)
-
-    def _clonar_fila(src_row, dst_row):
+    def _clonar_fila(src_row, dst_row, con_valor=False):
         for col in range(1, 10):
             src = ws.cell(src_row, col)
             dst = ws.cell(dst_row, col)
-            dst.value = src.value
+            if con_valor:
+                dst.value = src.value
             if src.has_style:
                 dst.font          = copy(src.font)
                 dst.border        = copy(src.border)
@@ -3122,112 +3118,117 @@ def hoja_pp_cap(wb_out, datos, tf, tpl):
                 dst.alignment     = copy(src.alignment)
         ws.row_dimensions[dst_row].height = ws.row_dimensions[src_row].height
 
-    # Clonar formato desde el bloque de K017 (título=52, headers=53-54, dato=55, total=56)
-    _clonar_fila(52, 59); _clonar_fila(53, 60); _clonar_fila(54, 61)
-    _clonar_fila(55, 62); _clonar_fila(56, 63)
-    ws.merge_cells(start_row=59, start_column=2, end_row=59, end_column=9)
-    # Encabezados (60-61): replicar exactamente el patrón combinado de K017
-    # (B53:C53, D53:E53, F53:F54, G53:H53, I53:I54) — sin esto el texto se
-    # aprieta en columnas angostas y se hace multilínea.
-    ws.merge_cells(start_row=60, start_column=2, end_row=60, end_column=3)   # Capítulo
-    ws.merge_cells(start_row=60, start_column=4, end_row=60, end_column=5)   # Presupuesto Anual
-    ws.merge_cells(start_row=60, start_column=6, end_row=61, end_column=6)   # % Variación
-    ws.merge_cells(start_row=60, start_column=7, end_row=60, end_column=8)   # Presupuesto al periodo
-    ws.merge_cells(start_row=60, start_column=9, end_row=61, end_column=9)   # % Variación
-    ws.merge_cells(start_row=63, start_column=2, end_row=63, end_column=3)
-    ws.cell(59, 1).value = "S263"
-    ws.cell(59, 2).value = PP_NOMBRES["S263"]
-    ws.cell(62, 1).value = "=$A$59&B62"
-    ws.cell(62, 2).value = 3000
-    ws.cell(62, 3).value = "Servicios Generales"
-    ws.cell(63, 2).value = "Total"
-
-    ws['B8']  = f"Avance en el ejercicio del presupuesto {tf['anio']} del Sector Central de AGRICULTURA"
-    ws['B9']  = f"Cifras con corte al cierre del {tf['trimestre']} de {tf['anio']}"
-    ws['B13'] = f"Cifras con corte al {tf['dia_mes_anio']} 1/ "
-    ws['B24'] = f"Fuente: {tf['fuente_map']}"
-
-    def set_row(fila, d):
+    def set_row_formula(fila, d):
         orig  = d.get("original_anual", 0) or 0
         mod   = d.get("modificado_anual", 0) or 0
         mod_p = d.get("modificado_p", d.get("original_p", 0)) or 0
         ejrc  = d.get("ejercido", 0) or 0
         ws.cell(fila, 4).value = orig
         ws.cell(fila, 5).value = mod
-        ws.cell(fila, 6).value = _var(orig, mod)
+        ws.cell(fila, 6).value = f"=+IFERROR((E{fila}-D{fila})/D{fila},0)"
         ws.cell(fila, 7).value = mod_p
         ws.cell(fila, 8).value = ejrc
-        ws.cell(fila, 9).value = _var(mod_p, ejrc)
+        ws.cell(fila, 9).value = f"=+IFERROR((H{fila}-G{fila})/G{fila},0)"
 
-    # Tabla global cap (filas 18-22) + Total(23) + R27 (total repetido sin etiqueta)
+    def _tiene_datos(d):
+        if not d:
+            return False
+        return bool(d.get('modificado_anual') or d.get('modificado_p') or d.get('original_anual'))
+
+    ws['B8']  = f"Avance en el ejercicio del presupuesto {tf['anio']} del Sector Central de AGRICULTURA"
+    ws['B9']  = f"Cifras con corte al cierre del {tf['trimestre']} de {tf['anio']}"
+    ws['B13'] = f"Cifras con corte al {tf['dia_mes_anio']} 1/ "
+
+    # ── Tabla global de capítulos (filas 18-22: 1000,2000,3000,4000,7000) ──
     for c, fila in [(1000,18),(2000,19),(3000,20),(4000,21),(7000,22)]:
-        set_row(fila, cap.get(c, {}))
-    set_row(23, pp.get("Total general", {}))
-    set_row(27, pp.get("Total general", {}))  # fila 27 = total sin encabezado (en plantilla)
+        set_row_formula(fila, cap.get(c, {}))
+    ws.cell(23,4).value = "=SUM(D18:D22)"
+    ws.cell(23,5).value = "=SUM(E18:E22)"
+    ws.cell(23,6).value = "=+IFERROR((E23-D23)/D23,0)"
+    ws.cell(23,7).value = "=SUM(G18:G22)"
+    ws.cell(23,8).value = "=SUM(H18:H22)"
+    ws.cell(23,9).value = "=+IFERROR((H23-G23)/G23,0)"
+    ws['B24'] = f"Fuente: {tf['fuente_map']}"
 
-    # ── Ampliar bloques de S304 y S318: también tienen movimiento en
-    #    capítulo 2000 y 3000 (montos chicos), no solo el 4000. Se
-    #    insertan 2 filas de dato extra antes de cada "Total", igual que
-    #    se hizo con S263 (manejo manual de merges porque insert_rows no
-    #    las recorre solo).
-    def _expandir_bloque(fila_dato_actual, fila_total_actual, n_extra):
-        merges_a_mover = [str(mg) for mg in list(ws.merged_cells.ranges)
-                           if mg.min_row >= fila_total_actual]
-        for mg_str in merges_a_mover:
-            ws.unmerge_cells(mg_str)
-        ws.insert_rows(fila_total_actual, n_extra)
-        from openpyxl.utils.cell import range_boundaries as _rb2
-        for mg_str in merges_a_mover:
-            c1, r1, c2, r2 = _rb2(mg_str)
-            r1 += n_extra; r2 += n_extra
-            ws.merge_cells(start_row=r1, start_column=c1, end_row=r2, end_column=c2)
-        for i in range(n_extra):
-            dst = fila_total_actual + i
-            for col in range(1, 10):
-                src = ws.cell(fila_dato_actual, col)
-                d = ws.cell(dst, col)
-                if src.has_style:
-                    d.font          = copy(src.font)
-                    d.border        = copy(src.border)
-                    d.fill          = copy(src.fill)
-                    d.number_format = src.number_format
-                    d.alignment     = copy(src.alignment)
-            ws.row_dimensions[dst].height = ws.row_dimensions[fila_dato_actual].height
-        return fila_total_actual + n_extra   # nueva fila de Total
+    # ── Bloques por Pp: posición ORIGINAL en la plantilla (título, primera
+    #    fila de dato, fila Total). S263 no existe en la plantilla — se
+    #    inserta como bloque nuevo, clonando el formato de K017.
+    PP_ORDEN = ["P021", "M001", "K017", "S263", "S292", "S293", "S304", "S318"]
+    BLOQUE_ORIG = {
+        "P021": (29, 32, 35), "M001": (38, 41, 44), "K017": (52, 55, 56),
+        "S263": None,
+        "S292": (59, 62, 66), "S293": (69, 72, 75),
+        "S304": (78, 81, 82), "S318": (85, 88, 89),
+    }
+    # Respaldo por si algún Pp no tiene NINGÚN capítulo con movimiento este
+    # mes (caso extremo) — se usa su composición típica en vez de adivinar.
+    CAPS_RESPALDO = {
+        "P021": [1000,2000,3000,4000], "M001": [1000,2000,3000], "K017": [7000],
+        "S263": [3000], "S292": [1000,2000,3000,4000], "S293": [2000,3000,4000],
+        "S304": [4000], "S318": [4000],
+    }
 
-    total_s304 = _expandir_bloque(88, 89, 2)   # 88,89,90 = 2000,3000,4000 ; total=91
-    total_s318 = _expandir_bloque(97, 98, 2)   # 97,98,99 = 2000,3000,4000 ; total=100
+    desplazamiento = 0
+    resultado = {}   # pp_k -> (fila_titulo, fila_dato_inicio, n_datos, fila_total)
 
-    # Tablas por Pp (filas por plantilla de Libro2; S263 insertado entre K017 y S292)
-    configs = [
-        ("P021", [(1000,32),(2000,33),(3000,34),(4000,35)], 36),
-        ("M001", [(1000,41),(2000,42),(3000,43)], 44),
-        ("K017", [(7000,55)], 56),
-        ("S263", [(3000,62)], 63),
-        ("S292", [(1000,69),(2000,70),(3000,71),(4000,72)], 73),
-        ("S293", [(2000,79),(3000,80),(4000,81)], 82),
-        ("S304", [(2000,88),(3000,89),(4000,90)], total_s304),
-        ("S318", [(2000,97),(3000,98),(4000,99)], total_s318),
-    ]
-    from openpyxl.styles import Font, PatternFill
-    COLOR_TOTAL_CAP = "BC955C"
+    for pp_k in PP_ORDEN:
+        caps = sorted(c for c in CAPITULOS if _tiene_datos(pc.get((pp_k, c))))
+        if not caps:
+            caps = CAPS_RESPALDO.get(pp_k, [1000])
+        n = len(caps)
+        orig = BLOQUE_ORIG[pp_k]
 
-    CAP_DENOM = {1000:"Servicios Personales", 2000:"Materiales y Suministros",
-                 3000:"Servicios Generales",
-                 4000:"Transferencias, asignaciones, subsidios y otras ayudas",
-                 7000:"Inversiones financieras y otras provisiones"}
+        if orig is None:
+            # Bloque nuevo (ej. S263): insertar donde le corresponda, entre
+            # el bloque anterior y el siguiente, clonando formato de K017.
+            titulo = 59 + desplazamiento   # posición original de "S292" antes de moverlo
+            n_filas_bloque = 3 + n + 1     # título + 2 encabezados + datos + total
+            _ajustar_filas(titulo, n_filas_bloque)
+            kt, kd, _kn, ktot = resultado["K017"]
+            _clonar_fila(kt, titulo, con_valor=False)
+            _clonar_fila(kt + 1, titulo + 1, con_valor=True)
+            _clonar_fila(kt + 2, titulo + 2, con_valor=True)
+            for i in range(n):
+                _clonar_fila(kd, titulo + 3 + i, con_valor=False)
+            _clonar_fila(ktot, titulo + 3 + n, con_valor=False)
+            ws.merge_cells(start_row=titulo, start_column=2, end_row=titulo, end_column=9)
+            ws.merge_cells(start_row=titulo+1, start_column=2, end_row=titulo+1, end_column=3)
+            ws.merge_cells(start_row=titulo+1, start_column=4, end_row=titulo+1, end_column=5)
+            ws.merge_cells(start_row=titulo+1, start_column=6, end_row=titulo+2, end_column=6)
+            ws.merge_cells(start_row=titulo+1, start_column=7, end_row=titulo+1, end_column=8)
+            ws.merge_cells(start_row=titulo+1, start_column=9, end_row=titulo+2, end_column=9)
+            ws.merge_cells(start_row=titulo+3+n, start_column=2, end_row=titulo+3+n, end_column=3)
+            ws.cell(titulo, 1).value = pp_k
+            ws.cell(titulo, 2).value = PP_NOMBRES[pp_k]
+            dato_inicio = titulo + 3
+            total_fila  = titulo + 3 + n
+            desplazamiento += n_filas_bloque
+        else:
+            titulo0, dato0, total0 = orig
+            titulo = titulo0 + desplazamiento
+            dato0_actual  = dato0 + desplazamiento
+            total0_actual = total0 + desplazamiento
+            n_orig = total0 - dato0
+            delta = n - n_orig
+            _ajustar_filas(total0_actual, delta)
+            if delta > 0:
+                for i in range(n_orig, n):
+                    _clonar_fila(dato0_actual, dato0_actual + i, con_valor=False)
+            dato_inicio = dato0_actual
+            total_fila  = total0_actual + delta
+            desplazamiento += delta
 
-    for pp_k, cap_filas, total_fila in configs:
-        for c, fila in cap_filas:
-            set_row(fila, pc.get((pp_k, c), {}))
-            ws.cell(fila, 1).value = f"{pp_k}{c}"
+        # ── Filas de dato: capítulo, denominación, cifras y fórmulas ──
+        for i, c in enumerate(caps):
+            fila = dato_inicio + i
+            d = pc.get((pp_k, c), {})
+            set_row_formula(fila, d)
+            ws.cell(fila, 1).value = f"=$A${titulo}&B{fila}"
             ws.cell(fila, 2).value = c
-            # Col C puede estar combinada — desmerge antes de escribir
             for mg in list(ws.merged_cells.ranges):
                 if mg.min_row <= fila <= mg.max_row and mg.min_col <= 3 <= mg.max_col:
                     ws.unmerge_cells(str(mg))
-            ws.cell(fila, 3).value = CAP_DENOM.get(c, '')
-            # Limpiar fill/bold heredado del template
+            ws.cell(fila, 3).value = CAPITULOS.get(c, '')
             for col_idx in range(1, 10):
                 cell = ws.cell(fila, col_idx)
                 cell.fill = PatternFill(fill_type=None)
@@ -3236,21 +3237,37 @@ def hoja_pp_cap(wb_out, datos, tf, tpl):
                                      bold=False, color=cell.font.color.rgb
                                      if cell.font.color and cell.font.color.type == 'rgb'
                                      else '000000')
-        # Fila Total: fill café, bold
+
+        # ── Fila Total: fórmulas SUM + IFERROR, relleno café, negritas ──
         ws.cell(total_fila, 1).value = None
         ws.cell(total_fila, 2).value = "Total"
-        # Desmerge col C si está combinada
         for mg in list(ws.merged_cells.ranges):
             if mg.min_row <= total_fila <= mg.max_row and mg.min_col <= 3 <= mg.max_col:
                 ws.unmerge_cells(str(mg))
         ws.cell(total_fila, 3).value = None
-        set_row(total_fila, pp.get(pp_k, {}))
+        d1, d2 = dato_inicio, dato_inicio + n - 1
+        ws.cell(total_fila, 4).value = f"=SUM(D{d1}:D{d2})"
+        ws.cell(total_fila, 5).value = f"=SUM(E{d1}:E{d2})"
+        ws.cell(total_fila, 6).value = f"=+IFERROR((E{total_fila}-D{total_fila})/D{total_fila},0)"
+        ws.cell(total_fila, 7).value = f"=SUM(G{d1}:G{d2})"
+        ws.cell(total_fila, 8).value = f"=SUM(H{d1}:H{d2})"
+        ws.cell(total_fila, 9).value = f"=+IFERROR((H{total_fila}-G{total_fila})/G{total_fila},0)"
         for col_idx in range(1, 10):
             cell = ws.cell(total_fila, col_idx)
             cell.fill = PatternFill('solid', fgColor=COLOR_TOTAL_CAP)
             cell.font = Font(name=cell.font.name if cell.font else 'Calibri',
-                             size=cell.font.size if cell.font else 11,
-                             bold=True)
+                             size=cell.font.size if cell.font else 11, bold=True)
+
+        resultado[pp_k] = (titulo, dato_inicio, n, total_fila)
+
+    # ── Fila de auditoría: suma de los Totales de cada Pp + diferencia ──
+    # (fila 27/28 quedan fijas: están ANTES del primer bloque de Pp, nunca
+    # se recorren aunque los bloques de abajo crezcan o se muevan)
+    for col in ['D', 'E', 'G', 'H']:
+        formula = "+".join(f"{col}{resultado[k][3]}" for k in PP_ORDEN)
+        ws[f'{col}27'] = f"={formula}"
+    ws['D28'] = "=D23-D27"; ws['E28'] = "=E23-E27"
+    ws['G28'] = "=G23-G27"; ws['H28'] = "=H23-H27"
 
     if 'Pp y CAP' in wb_out.sheetnames: del wb_out['Pp y CAP']
     ws_n = wb_out.create_sheet('Pp y CAP')
@@ -3404,14 +3421,14 @@ def hoja_comisario(wb_out, datos, tf, tpl):
             ws.cell(fila, 5).value = None   # E: sin original_p
             ws.cell(fila, 6).value = mod_p if mod_p else None   # F: modificado_p si existe
             ws.cell(fila, 7).value = None   # G: sin ejercido
-            ws.cell(fila, 8).value = 0.0    # H: 0.0% variación
+            ws.cell(fila, 8).value = f"=IFERROR(((G{fila}-F{fila})/F{fila}),0)"
         else:
             ws.cell(fila, 3).value = orig_a
             ws.cell(fila, 4).value = mod_a
             ws.cell(fila, 5).value = orig_p
             ws.cell(fila, 6).value = mod_p
             ws.cell(fila, 7).value = ejrc
-            ws.cell(fila, 8).value = _var(mod_p, ejrc)
+            ws.cell(fila, 8).value = f"=IFERROR(((G{fila}-F{fila})/F{fila}),0)"
 
         # Col I: justificación con % correcto del TD Comisario por Pp
         if pp_k == "K017":
@@ -3480,7 +3497,7 @@ def hoja_comisario(wb_out, datos, tf, tpl):
             (14, ori_p,              FMT_N),
             (15, mod_p,              FMT_N),
             (16, ejrc,               FMT_N),
-            (17, _var(mod_p, ejrc),  '0.0%'),
+            (17, f"=(P{fila}-O{fila})/O{fila}", '0.0%'),
         ]:
             c = ws_n.cell(fila, col)
             c.value = val
