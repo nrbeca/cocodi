@@ -21,7 +21,7 @@ def _ensure(pkg):
     try:
         importlib.import_module(pkg)
     except ImportError:
-        print(f"  📦 Instalando {pkg}...")
+        print(f"   Instalando {pkg}...")
         subprocess.check_call([_sys.executable, "-m", "pip", "install", pkg, "-q"])
 
 _ensure("openpyxl")
@@ -2720,7 +2720,7 @@ def leer_xlsx_map(path: str) -> dict:
                     disponible  = _sf(row[100].value),  # CW
                 )
     except Exception as _e:
-        print(f"  ⚠️  cap_com: {_e}")
+        print(f"    cap_com: {_e}")
     finally:
         _wb.close()
 
