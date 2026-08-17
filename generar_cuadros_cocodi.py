@@ -3090,20 +3090,22 @@ def _bloques_csv(df_sc: pd.DataFrame) -> dict:
     for cap in CAPITULOS:
         dc = df_sc[df_sc['CAP'] == cap]
         if dc.empty:
-            bloques[cap] = {"partidas": []}
+            bloques[cap] = {"partidas": [], "total_all": 0.0}
             continue
         pg = dc.groupby('PARTIDA')['DISP_P'].sum().reset_index()
         pg = pg[pg['DISP_P'] > 0].sort_values('DISP_P', ascending=False)
         total = pg['DISP_P'].sum()
         if total == 0:
-            bloques[cap] = {"partidas": []}
+            bloques[cap] = {"partidas": [], "total_all": 0.0}
             continue
         pg['PCT'] = pg['DISP_P'] / total
         bloques[cap] = {"partidas": [dict(clave=int(r['PARTIDA']),
                                           nombre=NOMBRES_PARTIDAS.get(int(r['PARTIDA']),
                                                                        f"Partida {int(r['PARTIDA'])}"),
+                                          monto=float(r['DISP_P']),
                                           pct=r['PCT'])
-                                     for _, r in pg.iterrows()]}
+                                     for _, r in pg.iterrows()],
+                        "total_all": float(total)}
     return bloques
 
 # ══════════════════════════════════════════════════════════════════════
@@ -3383,20 +3385,40 @@ def motivo_pp(bloque_pp: dict, n: int = 5) -> str:
     return f"El {pct_show*100:.1f} % de la variación se observa en las partidas:\n{', '.join(noms)}."
 
 def motivo_cap4000(datos: dict, tf: dict) -> str:
+    pc   = datos.get("pp_cap", {})
+    bloq = datos.get("bloques", {})
+    partidas_4000 = bloq.get(4000, {}).get("partidas", [])
+
+    # Desglose de la partida 43101 por Programa (los 4 de subsidios sujetos
+    # a Reglas de Operación), usando el disponible de CADA Pp específico en
+    # capítulo 4000 (no su disponible total en todos los capítulos).
     lineas = []
-    pc = datos.get("pp_cap", {})
-    for k in ["S318","S292","S304","S293"]:
+    for k in ["S318", "S292", "S304", "S293"]:
         d = pc.get((k, 4000), {})
         mod_p = d.get("modificado_p", d.get("original_p", 0)) or 0
         ejrc  = d.get("ejercido", 0) or 0
         disp  = d.get("disponible", mod_p - ejrc)
-        if disp > 0.001:
+        if disp > 0.005:
             n = PP_NOMBRES[k].split(" - ")[1]
-            lineas.append(f"{k} {n}: {disp:,.3f} mdp")
+            lineas.append(f"{k} {n}: {disp:,.2f} mdp")
+
+    partes = []
     if lineas:
-        return (f"La disponibilidad está distribuida de la siguiente manera:\n"
-                f"El Disponible al {tf['dia_mes_anio']} se encuentra en la partida 43101; "
-                + "; ".join(lineas) + ".")
+        partes.append(f"El Disponible al {tf['dia_mes_anio']} se encuentra en la "
+                       f"partida 43101 en los siguientes programas: " + " y ".join(lineas))
+
+    # Cualquier otra partida del capítulo 4000 (distinta de 43101) con
+    # disponible relevante, mencionada aparte (ej. 49201).
+    for p in partidas_4000:
+        if p.get("clave") == 43101:
+            continue
+        monto_mdp = (p.get("monto", 0) or 0) / 1_000_000
+        if monto_mdp > 0.005:
+            partes.append(f"mientras que en la partida {p['clave']} tiene un "
+                          f"disponible de {monto_mdp:,.2f} mdp")
+
+    if partes:
+        return "; ".join(partes) + "."
     return "El disponible del Capítulo 4000 está en la partida 43101."
 
 # ══════════════════════════════════════════════════════════════════════
