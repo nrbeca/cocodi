@@ -7,6 +7,7 @@ from generar_cuadros_cocodi import (
     detectar_fecha, textos_fecha, leer_csv_map, leer_xlsx_map,
     hoja_pp, hoja_pp_cap, hoja_agricultura, hoja_comisario,
     MESES_ES, TPL_PP, TPL_PPCAP, TPL_AGR, TPL_COM, DIAS_FIN_MES,
+    N_PARTIDAS_DEFAULT, PP_NOMBRES,
 )
 from generar_austeridad import generar_austeridad, detectar_corte
 import openpyxl
@@ -67,7 +68,39 @@ if archivo_map:
         dia_sel = st.number_input("Día de corte", min_value=1, max_value=DIAS_FIN_MES[mes_sel],
                                    value=min(fecha_auto["dia"], DIAS_FIN_MES[mes_sel]),
                                    key="dia_cocodi", step=1)
-    st.caption(f"Se generará el cuadro con corte al {dia_sel} de {MESES_ES[mes_sel]} de {anio_sel}")
+    st.caption(f"📅 Se generará el cuadro con corte al {dia_sel} de {MESES_ES[mes_sel]} de {anio_sel}")
+
+    with st.expander("⚙️ Ajustar partidas consideradas en el % de variación"):
+        st.caption(
+            "Cuántas partidas se listan (de mayor a menor monto) en cada texto de "
+            "\"Motivo de las variaciones\". Los valores por defecto son los que ya "
+            "se venían usando — solo cámbialos si un % se ve muy chico o muy grande."
+        )
+
+        st.markdown("**Hoja AGRICULTURA — tabla por capítulo**")
+        cA = st.columns(4)
+        n_agr = {}
+        for i, cap in enumerate([1000, 2000, 3000, 4000]):
+            with cA[i]:
+                n_agr[cap] = st.number_input(f"Cap. {cap}", min_value=1, max_value=15,
+                    value=N_PARTIDAS_DEFAULT["agricultura_cap"][cap], step=1, key=f"nagr_{cap}")
+
+        st.markdown("**Hoja Presupuesto Comisario — tabla por capítulo**")
+        cC = st.columns(4)
+        n_com_cap = {}
+        for i, cap in enumerate([1000, 2000, 3000, 4000]):
+            with cC[i]:
+                n_com_cap[cap] = st.number_input(f"Cap. {cap}", min_value=1, max_value=15,
+                    value=N_PARTIDAS_DEFAULT["comisario_cap"][cap], step=1, key=f"ncom_{cap}")
+
+        st.markdown("**Hoja Presupuesto Comisario — tabla por Programa Presupuestario**")
+        pp_orden = ["M001", "P021", "S263", "S292", "S293", "S304", "S318"]
+        cP = st.columns(4)
+        n_com_pp = {}
+        for i, pp_k in enumerate(pp_orden):
+            with cP[i % 4]:
+                n_com_pp[pp_k] = st.number_input(pp_k, min_value=1, max_value=15,
+                    value=N_PARTIDAS_DEFAULT["comisario_pp"][pp_k], step=1, key=f"npp_{pp_k}")
 
     if st.button("Generar cuadros COCODI", key="btn_cocodi"):
         with st.spinner("Procesando…"):
@@ -84,8 +117,8 @@ if archivo_map:
                 if "Sheet" in wb_out.sheetnames: del wb_out["Sheet"]
                 hoja_pp(wb_out,datos,tf,tpls["Pp"])
                 hoja_pp_cap(wb_out,datos,tf,tpls["PpCAP"])
-                hoja_agricultura(wb_out,datos,tf,tpls["AGRICULTURA"])
-                hoja_comisario(wb_out,datos,tf,tpls["Comisario"])
+                hoja_agricultura(wb_out,datos,tf,tpls["AGRICULTURA"], n_parts=n_agr)
+                hoja_comisario(wb_out,datos,tf,tpls["Comisario"], n_parts_pp=n_com_pp, n_parts_com=n_com_cap)
                 buf = io.BytesIO(); wb_out.save(buf); buf.seek(0)
                 mes_str = MESES_ES[fecha["mes"]].upper()
                 nombre_out = f"CUADROS_COCODI_{fecha['dia']:02d}-{mes_str}-{fecha['anio']}.xlsx"
