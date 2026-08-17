@@ -2382,6 +2382,18 @@ PP_NOMBRES = {
     "S318": "S318 - Comercio Justo",
 }
 
+# ── Cuántas partidas se listan en cada texto de "Motivo de las variaciones" ──
+# Configurable desde la app (sección "Ajustar partidas consideradas").
+N_PARTIDAS_DEFAULT = {
+    # Hoja AGRICULTURA — tabla por capítulo (1000/2000/3000/4000)
+    "agricultura_cap": {1000: 4, 2000: 5, 3000: 7, 4000: 4},
+    # Hoja Presupuesto Comisario — tabla por capítulo (1000/2000/3000/4000)
+    "comisario_cap":   {1000: 4, 2000: 4, 3000: 7, 4000: 2},
+    # Hoja Presupuesto Comisario — tabla por Pp
+    "comisario_pp":    {"M001": 7, "P021": 5, "S263": 3, "S292": 4,
+                         "S293": 3, "S304": 4, "S318": 3},
+}
+
 # Catálogo oficial de Unidades Responsables "Sector Central" (TIPO UR 1 =
 # "Oficinas Centrales"), tomado de Catalogo_de_equivalencias_2025-2026.xlsx.
 # Se usa en vez de un regex genérico de 3 dígitos para no incluir por error
@@ -3767,7 +3779,7 @@ def hoja_pp_cap(wb_out, datos, tf, tpl):
 #  HOJA AGRICULTURA
 # ══════════════════════════════════════════════════════════════════════
 
-def hoja_agricultura(wb_out, datos, tf, tpl):
+def hoja_agricultura(wb_out, datos, tf, tpl, n_parts=None):
     wb = _get_template(tpl)
     ws = wb['AGRICULTURA']
     cap = datos["cap"]
@@ -3784,7 +3796,9 @@ def hoja_agricultura(wb_out, datos, tf, tpl):
     ws['A16'] = f"Módulo de Adecuaciones Presupuestarias (MAP) {tf['anio']}, cifras al {tf['dia_mes_anio']}."
 
     # Datos por cap: 1000=9, 2000=10, 3000=11, 4000=12, 7000=13
-    n_parts = {1000:4, 2000:5, 3000:7, 4000:4, 7000:0}
+    _np = n_parts or N_PARTIDAS_DEFAULT["agricultura_cap"]
+    n_parts = {1000: _np.get(1000,4), 2000: _np.get(2000,5),
+               3000: _np.get(3000,7), 4000: _np.get(4000,4), 7000: 0}
     for c, fila in [(1000,9),(2000,10),(3000,11),(4000,12),(7000,13)]:
         d = cap.get(c, {})
         orig  = d.get("original_anual", 0) or 0
@@ -3827,12 +3841,14 @@ def hoja_agricultura(wb_out, datos, tf, tpl):
 #  HOJA PRESUPUESTO COMISARIO
 # ══════════════════════════════════════════════════════════════════════
 
-def hoja_comisario(wb_out, datos, tf, tpl):
+def hoja_comisario(wb_out, datos, tf, tpl, n_parts_pp=None, n_parts_com=None):
     wb = _get_template(tpl)
     ws = wb['Presupuesto Comisario']
     pp   = datos["pp"]
     cap  = datos["cap"]
     bloq = datos["bloques"]
+    _npp = n_parts_pp or N_PARTIDAS_DEFAULT["comisario_pp"]
+    _npc = n_parts_com or N_PARTIDAS_DEFAULT["comisario_cap"]
 
     # ── Insertar fila para S263 (no estaba en la plantilla original) ──
     # Va justo después de K017 y antes de S292, para que quede agrupada
@@ -3926,50 +3942,48 @@ def hoja_comisario(wb_out, datos, tf, tpl):
         elif pp_k == "S304":
             bp = bloques_pp.get(pp_k, {})
             if bp and bp.get('partidas'):
-                mot = motivo_pp(bp, 4)
+                mot = motivo_pp(bp, _npp.get("S304", 4))
             else:
                 mot = "La variación se encuentra en la partida 43101 Subsidios a la producción."
         elif pp_k == "S263":
             bp = bloques_pp.get(pp_k, {})
             if bp and bp.get('partidas'):
-                mot = motivo_pp(bp, 3)
+                mot = motivo_pp(bp, _npp.get("S263", 3))
             else:
                 mot = ""
         elif pp_k == "S318":
             bp = bloques_pp.get(pp_k, {})
             if bp and bp.get('partidas'):
-                mot = motivo_pp(bp, 3)
+                mot = motivo_pp(bp, _npp.get("S318", 3))
             else:
                 mot = "La variación se encuentra en la partida 43101 Subsidios a la producción."
         elif pp_k == "S293":
             bp = bloques_pp.get(pp_k, {})
-            # Confirmado con la TD Comisario actualizada: S293 solo reporta
-            # el top-3 de partidas (34101, 43101, 33903 = 90.9%).
             if bp and bp.get('partidas'):
-                mot = motivo_pp(bp, 3)
+                mot = motivo_pp(bp, _npp.get("S293", 3))
             else:
                 mot = "La variación se encuentra en la partida 43101 Subsidios a la producción."
         elif pp_k == "S292":
             bp = bloques_pp.get(pp_k, {})
-            # Confirmado con la TD Comisario actualizada: S292 reporta el
-            # top-4 de partidas (12101, 26102, 39801, 12201 = 84.9%).
             if bp and bp.get('partidas'):
-                mot = motivo_pp(bp, 4)
+                mot = motivo_pp(bp, _npp.get("S292", 4))
             else:
                 mot = "La variación se encuentra en la partida 43101 Subsidios a la producción."
         elif pp_k == "M001":
             bp = bloques_pp.get(pp_k, {})
+            n_m001 = _npp.get("M001", 7)
             if bp and bp.get('partidas'):
-                mot = motivo_pp(bp, 7)
+                mot = motivo_pp(bp, n_m001)
             else:
-                mot = motivo_cap(bloq.get(1000, {}), 7)
+                mot = motivo_cap(bloq.get(1000, {}), n_m001)
         else:
-            # P021: pct_total del TD Comisario por Pp, top-5
+            # P021
             bp = bloques_pp.get(pp_k, {})
+            n_p021 = _npp.get("P021", 5)
             if bp and bp.get('partidas'):
-                mot = motivo_pp(bp, 5)
+                mot = motivo_pp(bp, n_p021)
             else:
-                mot = motivo_cap(bloq.get(1000, {}), 5)
+                mot = motivo_cap(bloq.get(1000, {}), n_p021)
         ws.cell(fila, 9).value = mot
 
     # (cuadro 2 se escribe después de _copy_sheet — ver abajo)
@@ -3982,7 +3996,8 @@ def hoja_comisario(wb_out, datos, tf, tpl):
     #    las fórmulas VLOOKUP del template que referencian archivo externo ──
     cap_com = datos.get("cap_com", {})
     bloq    = datos.get("bloques", {})
-    n_parts_com = {1000:4, 2000:4, 3000:7, 4000:2, 7000:0}
+    n_parts_com = {1000: _npc.get(1000,4), 2000: _npc.get(2000,4),
+                   3000: _npc.get(3000,7), 4000: _npc.get(4000,2), 7000: 0}
 
     for cap_k, fila in [(1000,9),(2000,10),(3000,11),(4000,12),(7000,13)]:
         dc    = cap_com.get(cap_k, {})
@@ -4013,11 +4028,27 @@ def hoja_comisario(wb_out, datos, tf, tpl):
 # ══════════════════════════════════════════════════════════════════════
 
 def generar_cuadros(ruta_entrada: str, ruta_salida: str = None,
-                    mes_corte: int = None, anio_corte: int = None) -> str:
+                    mes_corte: int = None, anio_corte: int = None,
+                    n_partidas: dict = None) -> str:
     """
     Lee la base MAP del día (CSV o xlsx) y genera los 4 cuadros.
     Los templates están embebidos — no se necesitan archivos externos.
+
+    n_partidas: dict opcional para sobreescribir cuántas partidas se listan
+    en cada "Motivo de las variaciones". Estructura (todas las claves son
+    opcionales, lo que falte usa N_PARTIDAS_DEFAULT):
+        {
+          "agricultura_cap": {1000:4, 2000:5, 3000:7, 4000:4},
+          "comisario_cap":   {1000:4, 2000:4, 3000:7, 4000:2},
+          "comisario_pp":    {"M001":7, "P021":5, "S263":3, "S292":4,
+                               "S293":3, "S304":4, "S318":3},
+        }
     """
+    n_partidas = n_partidas or {}
+    n_agricultura = {**N_PARTIDAS_DEFAULT["agricultura_cap"], **n_partidas.get("agricultura_cap", {})}
+    n_com_cap     = {**N_PARTIDAS_DEFAULT["comisario_cap"],   **n_partidas.get("comisario_cap", {})}
+    n_com_pp      = {**N_PARTIDAS_DEFAULT["comisario_pp"],    **n_partidas.get("comisario_pp", {})}
+
     print(f"📂 Leyendo: {ruta_entrada}")
 
     # Fecha
@@ -4055,10 +4086,10 @@ def generar_cuadros(ruta_entrada: str, ruta_salida: str = None,
     hoja_pp_cap(wb_out, datos, tf, tpls['PpCAP'])
 
     print("📊 Generando AGRICULTURA...")
-    hoja_agricultura(wb_out, datos, tf, tpls['AGRICULTURA'])
+    hoja_agricultura(wb_out, datos, tf, tpls['AGRICULTURA'], n_parts=n_agricultura)
 
     print("📊 Generando Presupuesto Comisario...")
-    hoja_comisario(wb_out, datos, tf, tpls['Comisario'])
+    hoja_comisario(wb_out, datos, tf, tpls['Comisario'], n_parts_pp=n_com_pp, n_parts_com=n_com_cap)
 
     # Salida
     if ruta_salida is None:
