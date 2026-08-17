@@ -21,7 +21,7 @@ def _ensure(pkg):
     try:
         importlib.import_module(pkg)
     except ImportError:
-        print(f"   Instalando {pkg}...")
+        print(f"  📦 Instalando {pkg}...")
         subprocess.check_call([_sys.executable, "-m", "pip", "install", pkg, "-q"])
 
 _ensure("openpyxl")
@@ -2627,11 +2627,11 @@ def _sf(v):
     except: return 0.0
 
 def leer_xlsx_map(path: str) -> dict:
-    print("   Procesando xlsx con hojas TD...")
+    print("  📊 Procesando xlsx con hojas TD...")
     import openpyxl as _opxl
     xl = pd.ExcelFile(path)
     hojas = xl.sheet_names
-    print(f"   Hojas: {hojas}")
+    print(f"  📋 Hojas: {hojas}")
     # Abrir con openpyxl una sola vez para lectura de columnas con nombre
     _wb = _opxl.load_workbook(path, data_only=True, read_only=True)
 
@@ -3506,7 +3506,7 @@ def hoja_comisario(wb_out, datos, tf, tpl):
     #    las fórmulas VLOOKUP del template que referencian archivo externo ──
     cap_com = datos.get("cap_com", {})
     bloq    = datos.get("bloques", {})
-    n_parts_com = {1000:4, 2000:5, 3000:7, 4000:4, 7000:0}
+    n_parts_com = {1000:4, 2000:4, 3000:7, 4000:2, 7000:0}
 
     for cap_k, fila in [(1000,9),(2000,10),(3000,11),(4000,12),(7000,13)]:
         dc    = cap_com.get(cap_k, {})
@@ -3528,8 +3528,6 @@ def hoja_comisario(wb_out, datos, tf, tpl):
         # Col R: motivos de variación
         if cap_k == 7000:
             mot2 = "79902 Provisiones para erogaciones especiales."
-        elif cap_k == 4000:
-            mot2 = "El 100 % de la variación en los recursos se observa en la partida:\n43101 Subsidios a la Producción"
         else:
             mot2 = motivo_cap(bloq.get(cap_k, {}), n_parts_com[cap_k])
         ws_n.cell(fila, 18).value = mot2
