@@ -21,7 +21,7 @@ def _ensure(pkg):
     try:
         importlib.import_module(pkg)
     except ImportError:
-        print(f"  📦 Instalando {pkg}...")
+        print(f"   Instalando {pkg}...")
         subprocess.check_call([_sys.executable, "-m", "pip", "install", pkg, "-q"])
 
 _ensure("openpyxl")
@@ -2399,6 +2399,15 @@ UR_SECTOR_CENTRAL = frozenset([
     "800", "810", "811", "812",
     "900", "910", "911", "912", "920", "921", "922", "923", "924",
     "G00",
+    # Claves "viejas" (previas a la reorganización de 2025) que equivalen a
+    # Sector Central, tomadas de Equivalencias_01072025_v1.xlsx. Se incluyen
+    # por si algún mes el MAP trae todavía numeración mixta (vieja y nueva
+    # a la vez) — así no se pierde gasto ejercido bajo la clave anterior.
+    "108", "113", "121", "122", "123", "124", "125", "126", "127", "128",
+    "129", "130", "131", "132", "133", "134", "135", "136", "137", "138",
+    "139", "140", "141", "142", "143", "144", "145", "146", "147", "148",
+    "149", "150", "151", "152", "153", "215", "300", "310", "311", "312",
+    "314", "315", "400", "600", "612", "700",
 ])
 
 CAPITULOS = {
@@ -2454,6 +2463,7 @@ NOMBRES_PARTIDAS = {
     34101:"Servicios bancarios y financieros",
     33501:"Estudios e investigaciones",
     37104:"Pasajes aéreos nacionales para servidores públicos de mando en el desempeño de comisiones y funciones oficiales",
+    37504:"Viáticos nacionales para servidores públicos en el desempeño de funciones oficiales",
     34501:"Seguros de bienes patrimoniales",
     35101:"Mantenimiento y conservación de inmuebles para la prestación de servicios administrativos",
     35701:"Mantenimiento y conservación de maquinaria y equipo",
@@ -2613,11 +2623,11 @@ def _sf(v):
     except: return 0.0
 
 def leer_xlsx_map(path: str) -> dict:
-    print("  📊 Procesando xlsx con hojas TD...")
+    print("   Procesando xlsx con hojas TD...")
     import openpyxl as _opxl
     xl = pd.ExcelFile(path)
     hojas = xl.sheet_names
-    print(f"  📋 Hojas: {hojas}")
+    print(f"   Hojas: {hojas}")
     # Abrir con openpyxl una sola vez para lectura de columnas con nombre
     _wb = _opxl.load_workbook(path, data_only=True, read_only=True)
 
@@ -3294,7 +3304,7 @@ def hoja_agricultura(wb_out, datos, tf, tpl):
     ws['A16'] = f"Módulo de Adecuaciones Presupuestarias (MAP) {tf['anio']}, cifras al {tf['dia_mes_anio']}."
 
     # Datos por cap: 1000=9, 2000=10, 3000=11, 4000=12, 7000=13
-    n_parts = {1000:4, 2000:4, 3000:5, 4000:4, 7000:0}
+    n_parts = {1000:4, 2000:5, 3000:7, 4000:4, 7000:0}
     for c, fila in [(1000,9),(2000,10),(3000,11),(4000,12),(7000,13)]:
         d = cap.get(c, {})
         orig  = d.get("original_anual", 0) or 0
@@ -3448,7 +3458,11 @@ def hoja_comisario(wb_out, datos, tf, tpl):
             else:
                 mot = ""
         elif pp_k == "S318":
-            mot = "La variación se encuentra en la partida 43101 Subsidios a la producción."
+            bp = bloques_pp.get(pp_k, {})
+            if bp and bp.get('partidas'):
+                mot = motivo_pp(bp, 3)
+            else:
+                mot = "La variación se encuentra en la partida 43101 Subsidios a la producción."
         elif pp_k == "S293":
             bp = bloques_pp.get(pp_k, {})
             # Confirmado con la TD Comisario actualizada: S293 solo reporta
@@ -3484,7 +3498,7 @@ def hoja_comisario(wb_out, datos, tf, tpl):
     #    las fórmulas VLOOKUP del template que referencian archivo externo ──
     cap_com = datos.get("cap_com", {})
     bloq    = datos.get("bloques", {})
-    n_parts_com = {1000:4, 2000:4, 3000:5, 4000:4, 7000:0}
+    n_parts_com = {1000:4, 2000:5, 3000:7, 4000:4, 7000:0}
 
     for cap_k, fila in [(1000,9),(2000,10),(3000,11),(4000,12),(7000,13)]:
         dc    = cap_com.get(cap_k, {})
