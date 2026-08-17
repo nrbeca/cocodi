@@ -124,7 +124,7 @@ if archivo_map:
                 nombre_out = f"CUADROS_COCODI_{fecha['dia']:02d}-{mes_str}-{fecha['anio']}.xlsx"
                 os.unlink(ruta_tmp)
                 st.success(f" Cuadros generados — corte al {tf['dia_mes_anio']}")
-                st.download_button(label=f"⬇️  Descargar {nombre_out}", data=buf,
+                st.download_button(label=f"  Descargar {nombre_out}", data=buf,
                     file_name=nombre_out, mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     key="dl_cocodi")
             except Exception as e:
@@ -160,7 +160,7 @@ if archivo_sicop:
                 nombre_aust = f"FORMATO_AUSTERIDAD_{corte['abr3']}-{str(corte['anio'])[2:]}.xlsx"
                 os.unlink(ruta_sicop); os.unlink(ruta_out); os.rmdir(tmpdir)
                 st.success(f" Formato generado — corte al {corte['dia']} de {corte['mes_es']} de {corte['anio']}")
-                st.download_button(label=f"⬇️  Descargar {nombre_aust}", data=buf,
+                st.download_button(label=f"  Descargar {nombre_aust}", data=buf,
                     file_name=nombre_aust, mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     key="dl_aust")
             except Exception as e:
